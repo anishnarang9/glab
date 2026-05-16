@@ -35,6 +35,12 @@ export default function HomePage() {
           <p className="text-sm text-indigo-400 font-light">
             Your lab&apos;s collective memory
           </p>
+          <button
+            onClick={() => router.push("/team")}
+            className="text-xs text-indigo-300 hover:text-indigo-600 transition"
+          >
+            View team →
+          </button>
         </div>
 
         {/* Search bar */}
