@@ -29,7 +29,8 @@ function parseFrontmatter(raw: string): { meta: Record<string, string>; content:
 }
 
 async function main() {
-  const supabase = supabaseAdmin();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = supabaseAdmin() as any;
 
   // Fetch researchers from DB
   const { data: researchers, error: rErr } = await supabase.from("researchers").select("id, email");
