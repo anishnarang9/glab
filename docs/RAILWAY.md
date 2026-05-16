@@ -59,7 +59,7 @@ Railway OpenClaw decision policy for a richer remote decision endpoint later.
 ## Setup Steps
 
 1. Create or select a Railway project.
-2. Add a service from GitHub for `rohanb123/glab`, branch `P4An` until it lands on `main`.
+2. Add a service from GitHub for `anishnarang9/glab`, branch `P4An` until it lands on `main`.
 3. Point the service config file to `deploy/railway-web.json`.
 4. Add a second service from the same repo and branch, with config file `deploy/railway-openclaw-worker.json`.
 5. Add a third service from the same repo and branch, with config file `deploy/railway-morning-cron.json`.
@@ -76,8 +76,10 @@ Railway OpenClaw decision policy for a richer remote decision endpoint later.
 
 Use this order:
 
-1. Ask the repo owner to install/adjust the Railway GitHub app so Railway can access `rohanb123/glab`.
-2. Deploy from a local checkout with Railway CLI after logging in.
-3. Fork the repo into your GitHub account and deploy the fork.
+1. Use the fork now created at `anishnarang9/glab`.
+2. If the fork still does not show, configure the Railway GitHub app for your GitHub account and include the fork.
+3. Deploy from a local checkout with Railway CLI after logging in.
+4. Ask the upstream repo owner to install/adjust the Railway GitHub app so Railway can access `rohanb123/glab`.
 
-Forking is the practical fallback when the repo owner cannot or will not grant the Railway app access. It is not the only path.
+Forking is the practical fallback when the upstream repo owner cannot or will not
+grant the Railway app access. It is not the only path.
