@@ -35,7 +35,7 @@ async function main() {
   // Fetch researchers from DB
   const { data: researchers, error: rErr } = await supabase.from("researchers").select("id, email");
   if (rErr || !researchers) { console.error("Failed to fetch researchers:", rErr); process.exit(1); }
-  const emailToId = Object.fromEntries(researchers.map((r) => [r.email, r.id]));
+  const emailToId = Object.fromEntries((researchers as { id: string; email: string }[]).map((r) => [r.email, r.id]));
 
   const folders = await readdir(DEMO_DATA_DIR);
   const toInsert: {
