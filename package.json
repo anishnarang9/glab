@@ -13,6 +13,17 @@
     "send-digest": "bun scripts/send-digest.ts",
     "seed-corpus": "bun scripts/seed-corpus.ts"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.54.0",
+    "@supabase/supabase-js": "^2.50.0",
+    "next": "^15.3.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.18",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.4",
+    "typescript": "^5.8.3"
+  }
 }
