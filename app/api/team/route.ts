@@ -33,7 +33,10 @@ export async function GET() {
     ]);
 
   const data = (researchers ?? []).map((r) => ({
-    ...r,
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    created_at: r.created_at,
     projects: (artifacts ?? []).filter((a) => a.owner_id === r.id),
     matches: (matches ?? [])
       .filter((m) => m.researcher_id === r.id)
