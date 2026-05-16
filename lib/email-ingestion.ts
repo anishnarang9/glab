@@ -1,9 +1,10 @@
 import { execFile as execFileCallback } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { chmod, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { unzipSync } from 'fflate'
 import { createArtifact, listResearchers, type ArtifactType, type ResearcherRecord, type Tier } from '@/lib/artifacts'
 
 const execFile = promisify(execFileCallback)
@@ -277,27 +278,15 @@ async function installComposioCli(): Promise<string> {
   const response = await fetch(url, { headers: { 'User-Agent': 'labbrain-railway-worker' } })
   if (!response.ok) throw new Error(`Composio CLI download failed: ${response.status} ${response.statusText}`)
 
-  await writeFile(zipPath, Buffer.from(await response.arrayBuffer()))
-  await execFile('unzip', ['-oq', zipPath, '-d', installDir], { maxBuffer: 64 * 1024 * 1024 })
+  const archive = new Uint8Array(await response.arrayBuffer())
+  await writeFile(zipPath, Buffer.from(archive))
+  const entries = unzipSync(archive)
+  const binary = Object.entries(entries).find(([path]) => path.split('/').at(-1) === 'composio')
+  if (!binary) throw new Error(`Composio CLI archive did not contain a composio binary`)
 
-  const binary = await findComposioBinary(installDir)
-  if (!binary) throw new Error(`Composio CLI archive extracted without a composio binary in ${installDir}`)
-
-  if (binary !== target) await copyFile(binary, target)
+  await writeFile(target, Buffer.from(binary[1]))
   await chmod(target, 0o755)
   return target
-}
-
-async function findComposioBinary(dir: string): Promise<string | null> {
-  try {
-    const result = await execFile('find', [dir, '-type', 'f', '-name', 'composio'], { maxBuffer: 8 * 1024 * 1024 })
-    return result.stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find(Boolean) ?? null
-  } catch {
-    return null
-  }
 }
 
 function composioAssetName(): string {
