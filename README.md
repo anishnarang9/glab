@@ -37,7 +37,7 @@ bun run brain:ingest     # run the central ingestion/truth loop once
 bun run brain:morning    # morning scheduled run for Railway cron
 bun run openclaw:worker  # Railway worker: ingest sources, then apply OpenClaw decisions
 bun run openclaw:pending # apply OpenClaw to pending evidence only
-bun run openclaw:loop    # long-running Railway worker loop
+bun run openclaw:loop    # long-running Railway OpenClaw instance
 bun run ci               # typecheck, static pipeline verification, production build
 ```
 

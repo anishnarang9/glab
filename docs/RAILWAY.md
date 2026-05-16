@@ -27,8 +27,6 @@ LABBRAIN_DEFAULT_BRAIN_SUBJECT="research lab knowledge"
 LABBRAIN_DEFAULT_BRAIN_MISSION="Maintain evidence-backed shared truth for the lab"
 LABBRAIN_WORKER_TOKEN=
 OPENCLAW_OPERATOR_NAME="Glab Head GBrain OpenClaw"
-OPENCLAW_HEAD_GBRAIN_URL=
-OPENCLAW_HEAD_GBRAIN_TOKEN=
 OPENCLAW_POLL_INTERVAL_MS=60000
 OPENCLAW_PENDING_LIMIT=50
 LABBRAIN_ARXIV_QUERY=cat:cs.LG
@@ -47,8 +45,13 @@ Optional:
 ```bash
 ANTHROPIC_API_KEY=
 VOYAGE_API_KEY=
-RESEND_API_KEY=
+OPENCLAW_HEAD_GBRAIN_URL=
+OPENCLAW_HEAD_GBRAIN_TOKEN=
 ```
+
+For P4, `labbrain-openclaw-worker` is the OpenClaw instance. Do not block
+deployment on `OPENCLAW_HEAD_GBRAIN_URL`; that variable only swaps the local
+Railway OpenClaw decision policy for a richer remote decision endpoint later.
 
 ## Setup Steps
 
