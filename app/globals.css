@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Neue Haas Grotesk Display", "HelveticaNeue", "Helvetica Neue", Helvetica, "Inter", ui-sans-serif, sans-serif;
+  --color-neural-bg: #f7f6ff;
+  --color-neural-50: #f5f3ff;
+  --color-neural-100: #ede9fe;
+  --color-neural-200: #ddd6fe;
+  --color-neural-400: #a78bfa;
+  --color-neural-600: #4f46e5;
+  --color-neural-700: #4338ca;
+  --color-neural-900: #1e1b4b;
+}
+
+@keyframes synapse-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.4); }
+}
+
+@keyframes fire {
+  0% { width: 0; opacity: 1; }
+  100% { width: 100%; opacity: 0; }
+}
+
+.synapse-dot {
+  animation: synapse-pulse 2s ease-in-out infinite;
+}
+
+.synapse-dot-right {
+  animation: synapse-pulse 2s ease-in-out infinite 1s;
+}
