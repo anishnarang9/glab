@@ -6,10 +6,11 @@ import {
   ensureDefaultBrain,
   ensureResearcherSharedSource,
   finishIngestionRun,
+  getBrain,
   startIngestionRun,
 } from '@/lib/brain'
+import { runOpenClawOnEvidence } from '@/lib/openclaw'
 import { supabaseAdmin } from '@/lib/supabase'
-import { maintainTruthFromEvidence } from '@/lib/truth'
 import type {
   Artifact as ArtifactRecord,
   ArtifactTier as Tier,
@@ -183,7 +184,7 @@ async function normalizeArtifactInput(input: CreateArtifactInput): Promise<{
 }
 
 async function ingestSharedArtifact(artifact: ArtifactRecord): Promise<EvidenceItem | undefined> {
-  const brain = artifact.brain_id ? { id: artifact.brain_id } : await ensureDefaultBrain()
+  const brain = artifact.brain_id ? await getBrain(artifact.brain_id) : await ensureDefaultBrain()
   const source = await ensureResearcherSharedSource(brain.id)
   const run = await startIngestionRun({
     brainId: brain.id,
@@ -225,7 +226,11 @@ async function ingestSharedArtifact(artifact: ArtifactRecord): Promise<EvidenceI
           },
         ],
       })
-      await maintainTruthFromEvidence({ brainId: brain.id, evidence })
+      await runOpenClawOnEvidence({
+        brain,
+        evidence,
+        ingestionRunId: run.id,
+      })
     }
 
     await finishIngestionRun(run.id, created ? 'succeeded' : 'skipped')

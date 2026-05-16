@@ -7,6 +7,8 @@ import type { EvidenceItem, TruthClaim, TruthEvidenceRelationship } from '@/db/c
 type MaintainTruthInput = {
   brainId: string
   evidence: EvidenceItem
+  ingestionRunId?: string | null
+  decisionId?: string | null
   relationship?: TruthEvidenceRelationship
   rationale?: string
   confidence?: number
@@ -20,6 +22,7 @@ type MaintainTruthResult = {
 export async function maintainTruthFromEvidence(input: MaintainTruthInput): Promise<MaintainTruthResult> {
   const statement = statementFromEvidence(input.evidence)
   const confidence = clampConfidence(input.confidence ?? 0.55)
+  const relationship = input.relationship ?? 'supports'
   const client = supabaseAdmin()
 
   const existing = await client
@@ -32,12 +35,22 @@ export async function maintainTruthFromEvidence(input: MaintainTruthInput): Prom
   if (existing.error) throw existing.error
 
   if (existing.data) {
-    const nextConfidence = clampConfidence(Math.max(existing.data.confidence ?? 0, confidence))
+    const nextConfidence = nextClaimConfidence(existing.data.confidence, confidence, relationship)
+    const nextStatus = relationship === 'contradicts' ? 'contested' : existing.data.status
     const commit = await createBrainCommit({
       brainId: input.brainId,
-      kind: 'claim_supported',
-      summary: `Evidence supported existing claim: ${shorten(statement, 120)}`,
+      ingestionRunId: input.ingestionRunId ?? null,
+      kind: commitKindForRelationship(relationship, false),
+      summary: `OpenClaw marked evidence as ${relationship} for existing claim: ${shorten(statement, 120)}`,
       changes: [
+        ...(input.decisionId
+          ? [{
+              entityType: 'decision' as const,
+              entityId: input.decisionId,
+              changeType: 'linked' as const,
+              after: { relationship },
+            }]
+          : []),
         {
           entityType: 'claim',
           entityId: existing.data.id,
@@ -49,7 +62,7 @@ export async function maintainTruthFromEvidence(input: MaintainTruthInput): Prom
           entityType: 'evidence',
           entityId: input.evidence.id,
           changeType: 'linked',
-          after: { relationship: input.relationship ?? 'supports' },
+          after: { relationship },
         },
       ],
     })
@@ -61,7 +74,7 @@ export async function maintainTruthFromEvidence(input: MaintainTruthInput): Prom
         commit_id: commit.id,
         statement,
         confidence: nextConfidence,
-        rationale: input.rationale ?? 'New evidence supports the existing claim.',
+        rationale: input.rationale ?? `OpenClaw judged this evidence as ${relationship} for the existing claim.`,
       })
       .select()
       .single()
@@ -71,6 +84,7 @@ export async function maintainTruthFromEvidence(input: MaintainTruthInput): Prom
     const claimUpdate = await client
       .from('truth_claims')
       .update({
+        status: nextStatus,
         confidence: nextConfidence,
         current_revision_id: revision.data.id,
         updated_at: new Date().toISOString(),
@@ -84,8 +98,8 @@ export async function maintainTruthFromEvidence(input: MaintainTruthInput): Prom
     await linkEvidence({
       claimId: existing.data.id,
       evidenceId: input.evidence.id,
-      relationship: input.relationship ?? 'supports',
-      rationale: input.rationale ?? 'Evidence supports this claim.',
+      relationship,
+      rationale: input.rationale ?? `OpenClaw judged this evidence as ${relationship}.`,
       confidence,
     })
 
@@ -97,7 +111,7 @@ export async function maintainTruthFromEvidence(input: MaintainTruthInput): Prom
     .insert({
       brain_id: input.brainId,
       statement,
-      status: input.relationship === 'contradicts' ? 'contested' : 'active',
+      status: relationship === 'contradicts' ? 'contested' : 'active',
       confidence,
     })
     .select()
@@ -107,9 +121,18 @@ export async function maintainTruthFromEvidence(input: MaintainTruthInput): Prom
 
   const commit = await createBrainCommit({
     brainId: input.brainId,
-    kind: 'claim_created',
-    summary: `Created claim from evidence: ${shorten(statement, 120)}`,
+    ingestionRunId: input.ingestionRunId ?? null,
+    kind: commitKindForRelationship(relationship, true),
+    summary: `OpenClaw created claim from ${relationship} evidence: ${shorten(statement, 120)}`,
     changes: [
+      ...(input.decisionId
+        ? [{
+            entityType: 'decision' as const,
+            entityId: input.decisionId,
+            changeType: 'linked' as const,
+            after: { relationship },
+          }]
+        : []),
       {
         entityType: 'claim',
         entityId: claimInsert.data.id,
@@ -124,7 +147,7 @@ export async function maintainTruthFromEvidence(input: MaintainTruthInput): Prom
         entityId: input.evidence.id,
         changeType: 'linked',
         after: {
-          relationship: input.relationship ?? 'supports',
+          relationship,
         },
       },
     ],
@@ -137,7 +160,7 @@ export async function maintainTruthFromEvidence(input: MaintainTruthInput): Prom
       commit_id: commit.id,
       statement,
       confidence,
-      rationale: input.rationale ?? 'Initial claim extracted from new evidence.',
+      rationale: input.rationale ?? `Initial claim extracted after OpenClaw judged the evidence as ${relationship}.`,
     })
     .select()
     .single()
@@ -159,8 +182,8 @@ export async function maintainTruthFromEvidence(input: MaintainTruthInput): Prom
   await linkEvidence({
     claimId: claimInsert.data.id,
     evidenceId: input.evidence.id,
-    relationship: input.relationship ?? 'supports',
-    rationale: input.rationale ?? 'Evidence created this claim.',
+    relationship,
+    rationale: input.rationale ?? `OpenClaw judged this evidence as ${relationship}.`,
     confidence,
   })
 
@@ -200,6 +223,24 @@ function statementFromEvidence(evidence: EvidenceItem): string {
 
 function clampConfidence(value: number): number {
   return Math.max(0, Math.min(1, value))
+}
+
+function nextClaimConfidence(
+  currentConfidence: number | null,
+  evidenceConfidence: number,
+  relationship: TruthEvidenceRelationship,
+): number {
+  const current = currentConfidence ?? 0
+  if (relationship === 'contradicts') return clampConfidence(Math.min(current || 0.5, 1 - evidenceConfidence * 0.5))
+  if (relationship === 'refines') return clampConfidence(Math.max(current, evidenceConfidence) + 0.03)
+  return clampConfidence(Math.max(current, evidenceConfidence))
+}
+
+function commitKindForRelationship(relationship: TruthEvidenceRelationship, created: boolean) {
+  if (created) return 'claim_created'
+  if (relationship === 'contradicts') return 'claim_contradicted'
+  if (relationship === 'refines') return 'claim_refined'
+  return 'claim_supported'
 }
 
 function shorten(value: string, max: number): string {

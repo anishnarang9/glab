@@ -43,3 +43,18 @@ set
   config = excluded.config,
   cadence = excluded.cadence,
   enabled = true;
+
+insert into openclaw_instances (brain_id, name, role, status, access_scope)
+select
+  brains.id,
+  'Glab Head GBrain OpenClaw',
+  'head_gbrain_operator',
+  'active',
+  '{"read":["brains","brain_sources","evidence_items","truth_claims","brain_commits"],"write":["ingestion_runs","openclaw_decisions","truth_revisions","truth_evidence_edges","brain_commits"]}'::jsonb
+from brains
+where brains.name = 'LabBrain'
+on conflict (brain_id, name) do update
+set
+  role = excluded.role,
+  status = excluded.status,
+  access_scope = excluded.access_scope;

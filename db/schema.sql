@@ -85,12 +85,29 @@ create table brain_sources (
 create index on brain_sources (brain_id, enabled);
 create index on brain_sources (kind);
 
+-- OpenClaw is the autonomous operator for the head Central GBrain.
+-- Researcher GBrains do not get OpenClaw instances; they only contribute data.
+create table openclaw_instances (
+  id                uuid primary key default gen_random_uuid(),
+  brain_id          uuid not null references brains(id) on delete cascade,
+  name              text not null,
+  role              text not null default 'head_gbrain_operator' check (role in ('head_gbrain_operator')),
+  endpoint_url      text,
+  status            text not null default 'active' check (status in ('active', 'paused', 'revoked')),
+  access_scope      jsonb not null default '{}'::jsonb,
+  last_heartbeat_at timestamptz,
+  created_at        timestamptz default now(),
+  unique (brain_id, name)
+);
+
+create index on openclaw_instances (brain_id, status);
+
 -- Every run is recorded so morning jobs and live ingests cannot fail silently.
 create table ingestion_runs (
   id          uuid primary key default gen_random_uuid(),
   brain_id    uuid references brains(id) on delete cascade,
   source_id   uuid references brain_sources(id) on delete set null,
-  trigger     text not null check (trigger in ('morning_cron', 'manual', 'researcher_share', 'source_refresh')),
+  trigger     text not null check (trigger in ('morning_cron', 'manual', 'researcher_share', 'source_refresh', 'openclaw_worker')),
   status      text not null default 'running' check (status in ('running', 'succeeded', 'failed', 'skipped')),
   started_at  timestamptz default now(),
   finished_at timestamptz,
@@ -126,6 +143,29 @@ create index on evidence_items (source_id, created_at desc);
 create index on evidence_items (artifact_id);
 create index on evidence_items (paper_id);
 
+-- OpenClaw decides which observations affect shared truth and why.
+create table openclaw_decisions (
+  id               uuid primary key default gen_random_uuid(),
+  brain_id         uuid not null references brains(id) on delete cascade,
+  instance_id      uuid references openclaw_instances(id) on delete set null,
+  ingestion_run_id uuid references ingestion_runs(id) on delete set null,
+  evidence_id      uuid references evidence_items(id) on delete set null,
+  decision_type    text not null check (decision_type in ('ingest', 'skip', 'claim_created', 'claim_supported', 'claim_contradicted', 'claim_refined', 'request_human_review')),
+  subject          text not null,
+  rationale        text,
+  confidence       float check (confidence >= 0 and confidence <= 1),
+  payload          jsonb not null default '{}'::jsonb,
+  status           text not null default 'proposed' check (status in ('proposed', 'applied', 'rejected', 'failed')),
+  created_at       timestamptz default now(),
+  applied_at       timestamptz,
+  error            text
+);
+
+create index on openclaw_decisions (brain_id, created_at desc);
+create index on openclaw_decisions (instance_id, created_at desc);
+create index on openclaw_decisions (evidence_id);
+create index on openclaw_decisions (status);
+
 -- Current beliefs of the Central GBrain.
 create table truth_claims (
   id                  uuid primary key default gen_random_uuid(),
@@ -146,7 +186,7 @@ create table brain_commits (
   brain_id         uuid references brains(id) on delete cascade,
   parent_commit_id uuid references brain_commits(id) on delete set null,
   ingestion_run_id uuid references ingestion_runs(id) on delete set null,
-  kind             text not null check (kind in ('source_ingested', 'evidence_added', 'claim_created', 'claim_supported', 'claim_weakened', 'claim_contradicted', 'claim_refined', 'researcher_relevance_changed', 'digest_rendered')),
+  kind             text not null check (kind in ('source_ingested', 'evidence_added', 'openclaw_decision', 'claim_created', 'claim_supported', 'claim_weakened', 'claim_contradicted', 'claim_refined', 'researcher_relevance_changed', 'digest_rendered')),
   summary          text not null,
   commit_hash      text not null unique,
   created_at       timestamptz default now()
@@ -189,7 +229,7 @@ create index on truth_evidence_edges (evidence_id);
 create table brain_commit_changes (
   id          uuid primary key default gen_random_uuid(),
   commit_id   uuid references brain_commits(id) on delete cascade,
-  entity_type text not null check (entity_type in ('source', 'run', 'evidence', 'claim', 'revision', 'edge', 'digest', 'artifact')),
+  entity_type text not null check (entity_type in ('source', 'run', 'evidence', 'claim', 'revision', 'edge', 'digest', 'artifact', 'operator', 'decision')),
   entity_id   uuid not null,
   change_type text not null check (change_type in ('created', 'updated', 'linked', 'skipped')),
   before_json jsonb,

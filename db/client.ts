@@ -8,12 +8,16 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type BrainStatus = 'active' | 'paused' | 'archived'
 export type BrainSourceKind = 'arxiv_query' | 'rss_feed' | 'web_page' | 'researcher_shared_artifacts' | 'manual_upload'
 export type BrainSourceCadence = 'manual' | 'hourly' | 'daily'
-export type IngestionRunTrigger = 'morning_cron' | 'manual' | 'researcher_share' | 'source_refresh'
+export type OpenClawInstanceRole = 'head_gbrain_operator'
+export type OpenClawInstanceStatus = 'active' | 'paused' | 'revoked'
+export type IngestionRunTrigger = 'morning_cron' | 'manual' | 'researcher_share' | 'source_refresh' | 'openclaw_worker'
 export type IngestionRunStatus = 'running' | 'succeeded' | 'failed' | 'skipped'
+export type OpenClawDecisionType = 'ingest' | 'skip' | 'claim_created' | 'claim_supported' | 'claim_contradicted' | 'claim_refined' | 'request_human_review'
+export type OpenClawDecisionStatus = 'proposed' | 'applied' | 'rejected' | 'failed'
 export type TruthClaimStatus = 'active' | 'contested' | 'superseded' | 'retracted'
 export type TruthEvidenceRelationship = 'supports' | 'contradicts' | 'refines' | 'duplicates' | 'background' | 'orthogonal'
-export type BrainCommitKind = 'source_ingested' | 'evidence_added' | 'claim_created' | 'claim_supported' | 'claim_weakened' | 'claim_contradicted' | 'claim_refined' | 'researcher_relevance_changed' | 'digest_rendered'
-export type BrainCommitEntityType = 'source' | 'run' | 'evidence' | 'claim' | 'revision' | 'edge' | 'digest' | 'artifact'
+export type BrainCommitKind = 'source_ingested' | 'evidence_added' | 'openclaw_decision' | 'claim_created' | 'claim_supported' | 'claim_weakened' | 'claim_contradicted' | 'claim_refined' | 'researcher_relevance_changed' | 'digest_rendered'
+export type BrainCommitEntityType = 'source' | 'run' | 'evidence' | 'claim' | 'revision' | 'edge' | 'digest' | 'artifact' | 'operator' | 'decision'
 export type BrainCommitChangeType = 'created' | 'updated' | 'linked' | 'skipped'
 
 export interface Database {
@@ -155,6 +159,32 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['brain_sources']['Insert']>
         Relationships: []
       }
+      openclaw_instances: {
+        Row: {
+          id: string
+          brain_id: string
+          name: string
+          role: OpenClawInstanceRole
+          endpoint_url: string | null
+          status: OpenClawInstanceStatus
+          access_scope: Json
+          last_heartbeat_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          brain_id: string
+          name: string
+          role?: OpenClawInstanceRole
+          endpoint_url?: string | null
+          status?: OpenClawInstanceStatus
+          access_scope?: Json
+          last_heartbeat_at?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['openclaw_instances']['Insert']>
+        Relationships: []
+      }
       ingestion_runs: {
         Row: {
           id: string
@@ -215,6 +245,42 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['evidence_items']['Insert']>
+        Relationships: []
+      }
+      openclaw_decisions: {
+        Row: {
+          id: string
+          brain_id: string
+          instance_id: string | null
+          ingestion_run_id: string | null
+          evidence_id: string | null
+          decision_type: OpenClawDecisionType
+          subject: string
+          rationale: string | null
+          confidence: number | null
+          payload: Json
+          status: OpenClawDecisionStatus
+          created_at: string
+          applied_at: string | null
+          error: string | null
+        }
+        Insert: {
+          id?: string
+          brain_id: string
+          instance_id?: string | null
+          ingestion_run_id?: string | null
+          evidence_id?: string | null
+          decision_type: OpenClawDecisionType
+          subject: string
+          rationale?: string | null
+          confidence?: number | null
+          payload?: Json
+          status?: OpenClawDecisionStatus
+          created_at?: string
+          applied_at?: string | null
+          error?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['openclaw_decisions']['Insert']>
         Relationships: []
       }
       truth_claims: {
@@ -348,8 +414,10 @@ export type Paper = Database['public']['Tables']['papers']['Row']
 export type PaperMatch = Database['public']['Tables']['paper_matches']['Row']
 export type Brain = Database['public']['Tables']['brains']['Row']
 export type BrainSource = Database['public']['Tables']['brain_sources']['Row']
+export type OpenClawInstance = Database['public']['Tables']['openclaw_instances']['Row']
 export type IngestionRun = Database['public']['Tables']['ingestion_runs']['Row']
 export type EvidenceItem = Database['public']['Tables']['evidence_items']['Row']
+export type OpenClawDecision = Database['public']['Tables']['openclaw_decisions']['Row']
 export type TruthClaim = Database['public']['Tables']['truth_claims']['Row']
 export type BrainCommit = Database['public']['Tables']['brain_commits']['Row']
 export type TruthRevision = Database['public']['Tables']['truth_revisions']['Row']

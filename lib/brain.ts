@@ -89,6 +89,18 @@ export async function ensureDefaultBrain(input: EnsureBrainInput = {}): Promise<
   return data
 }
 
+export async function getBrain(brainId: string): Promise<Brain> {
+  const client = supabaseAdmin()
+  const { data, error } = await client
+    .from('brains')
+    .select()
+    .eq('id', brainId)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
 export async function ensureBrainSource(input: EnsureSourceInput): Promise<BrainSource> {
   const client = supabaseAdmin()
   const { data, error } = await client

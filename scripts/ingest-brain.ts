@@ -1,5 +1,6 @@
 // Central GBrain ingestion runner. Used by manual runs and Railway cron.
 
+import { fileURLToPath } from 'node:url'
 import {
   createBrainCommit,
   createEvidenceItem,
@@ -9,7 +10,7 @@ import {
   startIngestionRun,
 } from '@/lib/brain'
 import { supabaseAdmin } from '@/lib/supabase'
-import { maintainTruthFromEvidence } from '@/lib/truth'
+import { runOpenClawOnEvidence } from '@/lib/openclaw'
 import type { Artifact, Brain, BrainSource, IngestionRunTrigger, Json, Paper } from '@/db/client'
 
 type EvidenceSeed = {
@@ -32,15 +33,14 @@ type ArxivEntry = {
   publishedAt: string | null
 }
 
-async function main(): Promise<void> {
-  const trigger = parseTrigger()
+export async function runCentralGBrainIngestion(trigger: IngestionRunTrigger = parseTrigger()): Promise<number> {
   const brain = await ensureDefaultBrain()
   await ensureConfiguredSources(brain)
   const sources = await enabledSources(brain.id)
 
   if (sources.length === 0) {
     console.log(`No enabled sources for brain ${brain.name}`)
-    return
+    return 0
   }
 
   let createdEvidence = 0
@@ -49,6 +49,11 @@ async function main(): Promise<void> {
   }
 
   console.log(`Central GBrain ingestion complete: ${createdEvidence} new evidence items`)
+  return createdEvidence
+}
+
+async function main(): Promise<void> {
+  await runCentralGBrainIngestion()
 }
 
 function parseTrigger(): IngestionRunTrigger {
@@ -56,7 +61,12 @@ function parseTrigger(): IngestionRunTrigger {
   const triggerIndex = argv.indexOf('--trigger')
   if (triggerIndex === -1) return 'manual'
   const value = argv[triggerIndex + 1]
-  if (value === 'morning_cron' || value === 'manual' || value === 'source_refresh') return value
+  if (
+    value === 'morning_cron' ||
+    value === 'manual' ||
+    value === 'source_refresh' ||
+    value === 'openclaw_worker'
+  ) return value
   throw new Error(`Invalid --trigger value: ${value}`)
 }
 
@@ -148,7 +158,7 @@ async function ingestSource(brain: Brain, source: BrainSource, trigger: Ingestio
           },
         ],
       })
-      await maintainTruthFromEvidence({ brainId: brain.id, evidence })
+      await runOpenClawOnEvidence({ brain, evidence, ingestionRunId: run.id })
     }
 
     await markSourceChecked(source.id)
@@ -357,7 +367,9 @@ function splitEnv(value: string | undefined): string[] {
   return value?.split(',').map((item) => item.trim()).filter(Boolean) ?? []
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
-})
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })
+}

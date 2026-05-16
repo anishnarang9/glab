@@ -1,4 +1,6 @@
-// P2 — HTTP handler. Joins artifacts + paper_matches per researcher.
+import { listResearchers } from '@/lib/artifacts'
+
 export async function GET() {
-  return Response.json({ researchers: [] });
+  const researchers = await listResearchers()
+  return Response.json({ researchers })
 }

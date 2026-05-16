@@ -13,7 +13,9 @@
     "send-digest": "bun scripts/send-digest.ts",
     "seed-corpus": "bun scripts/seed-corpus.ts",
     "brain:ingest": "bun scripts/ingest-brain.ts",
-    "brain:morning": "bun scripts/ingest-brain.ts --trigger morning_cron"
+    "brain:morning": "bun scripts/ingest-brain.ts --trigger morning_cron",
+    "openclaw:worker": "bun scripts/openclaw-head-gbrain.ts",
+    "openclaw:pending": "bun scripts/openclaw-head-gbrain.ts --pending-only"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.54.0",

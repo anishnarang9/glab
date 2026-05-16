@@ -11,6 +11,10 @@ The product center is now **Central GBrain**: a persistent brain entity that
 ingests new research data, maintains evidence-backed truth claims, and writes
 mini git-like commits whenever its understanding changes.
 
+OpenClaw is the autonomous operator for the head Central GBrain. It decides
+whether new evidence is relevant, records that decision, and only then applies
+truth changes.
+
 Current branch: `P4An`.
 
 Important current state:
@@ -26,16 +30,23 @@ Central GBrain is the brain entity for a lab/topic.
 
 ```text
 researcher GBrains ─┐
-arXiv / news / web ─┼──▶ Central GBrain ───▶ onboarding answers
-manual uploads    ─┘          │             ├──▶ team dashboard
-                              │             └──▶ digests / alerts
-                              ▼
-                    truth claims + evidence + commits
+arXiv / news / web ─┼──▶ evidence queue ───▶ OpenClaw head operator
+manual uploads    ─┘                                  │
+                                                      ▼
+                                             Central GBrain
+                                                  │
+                                                  ├──▶ onboarding answers
+                                                  ├──▶ team dashboard
+                                                  └──▶ digests / alerts
 ```
 
 Researcher GBrains are sub-identities. They can keep private artifacts, or
 explicitly share an artifact into the Central GBrain. Shared artifacts become
 evidence, not final truth.
+
+Researcher GBrains do not run OpenClaw in this pass. They are data sources. The
+head Central GBrain's OpenClaw instance is the only autonomous truth-maintenance
+operator.
 
 ## Locked decisions
 
@@ -49,6 +60,8 @@ evidence, not final truth.
 | D6 | First deployment target: Supabase + Railway web service + Railway worker/cron. |
 | D7 | Voyage embeddings remain 1024-dimensional unless the whole schema and stored vectors are migrated. |
 | D8 | First pass should be complete enough to show evidence, claims, commits, and digest/dashboard output. Do not overbuild multi-lab auth/sync. |
+| D9 | OpenClaw controls the head Central GBrain; smaller researcher GBrains only send data. |
+| D10 | OpenClaw decisions are persisted before truth claims are created, refined, or contested. |
 
 ## Data model
 
@@ -63,8 +76,10 @@ Central GBrain additions:
 
 - `brains`
 - `brain_sources`
+- `openclaw_instances`
 - `ingestion_runs`
 - `evidence_items`
+- `openclaw_decisions`
 - `truth_claims`
 - `truth_revisions`
 - `truth_evidence_edges`
@@ -76,6 +91,8 @@ Table meanings:
 - `artifacts`: researcher-owned input; `shared` artifacts feed the brain.
 - `papers`: raw paper records; paper abstracts can become evidence.
 - `evidence_items`: immutable-ish facts/snippets the brain can cite.
+- `openclaw_instances`: registered operator for the head Central GBrain.
+- `openclaw_decisions`: relevance/action decisions before truth mutation.
 - `truth_claims`: current brain beliefs.
 - `truth_revisions`: claim history.
 - `brain_commits`: "what changed" events.
@@ -93,11 +110,12 @@ normalize + dedupe
 store evidence item
       |
       v
-extract candidate claims
+OpenClaw observes evidence + current truth
       |
       v
-compare against truth_claims
+OpenClaw decides relevance + relationship
       |
+      +--> skip
       +--> supports
       +--> contradicts
       +--> refines
@@ -123,8 +141,8 @@ Central GBrain reset crosses P1/P3/P4 boundaries. Coordinate by module:
 | Lane | Modules | Purpose |
 |------|---------|---------|
 | A | `db/` | Central GBrain schema + typed DB contract |
-| B | `lib/brain.ts`, `lib/truth.ts` | core brain/evidence/commit helpers |
-| C | `scripts/` | source ingestion and morning run |
+| B | `lib/brain.ts`, `lib/openclaw.ts`, `lib/truth.ts` | core brain/evidence/OpenClaw/commit helpers |
+| C | `scripts/` | source ingestion, OpenClaw worker, and morning run |
 | D | `lib/artifacts.ts`, `cli/` | researcher sub-GBrain sharing |
 | E | `app/`, `components/` | product surfaces reading brain state |
 
@@ -139,6 +157,8 @@ Prefer parallel work only when lanes do not touch the same module.
 4. **Morning job silently fails.** Use `ingestion_runs` status and errors.
 5. **Old surfaces query raw shared artifacts only.** Migrate them to brain state.
 6. **Railway cron overlap/skips hide work.** Make ingestion idempotent and visible.
+7. **OpenClaw becomes hand-wavy.** Persist `openclaw_decisions` and make truth
+   mutations depend on those decisions.
 
 ## Commands
 
@@ -148,6 +168,8 @@ bun run build
 bun run seed-corpus
 bun run brain:ingest
 bun run brain:morning
+bun run openclaw:worker
+bun run openclaw:pending
 ```
 
 `brain:ingest` and `brain:morning` may be added as part of the Central GBrain
@@ -159,8 +181,12 @@ Recommended first deployment:
 
 - Supabase for Postgres + pgvector.
 - Railway web service for Next.js.
-- Railway worker service for manual/background ingestion.
+- Railway worker service for the OpenClaw head Central GBrain operator.
 - Railway cron service for morning runs.
+
+Use `LABBRAIN_WORKER_TOKEN` for secured web hooks. Use Supabase service-role
+credentials only in the Railway worker/web server environment, never browser
+code.
 
 Do not split into a complex queue architecture until the single worker loop
 proves the product.
@@ -171,6 +197,7 @@ proves the product.
 - Google SSO / real auth
 - local PGLite sync
 - revoke-share state machine
+- OpenClaw inside smaller researcher GBrains
 - broad connector ecosystem
 - full contradiction-resolution UI
 - production eval suite

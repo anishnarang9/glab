@@ -14,6 +14,8 @@ research domain, or topic.
 The Central GBrain is a persistent brain entity. It reads new research, accepts
 shared updates from individual researcher GBrains, maintains an evidence-backed
 truth state, and emits mini git-like commits whenever its understanding changes.
+OpenClaw is the autonomous operator that decides which observations matter and
+how they should affect the brain's shared truth.
 
 Supabase is the memory store. The Central GBrain is the product.
 
@@ -22,10 +24,18 @@ Supabase is the memory store. The Central GBrain is the product.
                     arXiv / RSS / news / web pages
                                   |
                                   v
-Researcher GBrains -----> Central GBrain -----> onboarding answers
- shared artifacts             |                 team dashboard
- project updates              |                 daily digest
- notes/findings               v                 urgent alerts
+Researcher GBrains -----> evidence queue
+ shared artifacts                 |
+ project updates                  v
+ notes/findings       OpenClaw head operator
+                                  |
+live sources ---------------------+
+arXiv / RSS / news / web          |
+                                  v
+                         Central GBrain -----> onboarding answers
+                              |                 team dashboard
+                              |                 daily digest
+                              v                 urgent alerts
                        truth graph + commits
 ```
 
@@ -78,6 +88,23 @@ item, lab webpage excerpt, researcher note, project update, or finding.
 Evidence is immutable enough to cite. If the source changes, we create a new
 evidence item or an updated commit, not a silent overwrite.
 
+### OpenClaw head operator
+
+OpenClaw is the decision layer for the head Central GBrain. It observes evidence,
+current truth claims, and recent commits; decides whether the evidence is relevant
+to the research subject; then applies one of these actions:
+
+- skip because the item is not useful enough
+- support an existing claim
+- contradict and contest a claim
+- refine a claim
+- create a new claim
+- request human review
+
+Only the head Central GBrain gets an OpenClaw operator. Individual researcher
+GBrains stay data-only for this pass: they can share artifacts, but they do not
+autonomously mutate shared truth.
+
 ### Truth claim
 
 A `truth_claim` is the brain's current belief about the research domain.
@@ -114,7 +141,8 @@ and get a real answer.
 ## Truth maintenance loop
 
 The truth loop runs whenever new data arrives. Morning cron is one trigger.
-Mid-day researcher sharing is another trigger.
+Mid-day researcher sharing is another trigger. OpenClaw owns the observe/decide
+step before truth changes are applied.
 
 ```
 new data arrives
@@ -126,11 +154,12 @@ normalize + dedupe
 store evidence item
       |
       v
-extract candidate claims
+OpenClaw observes evidence + truth state
       |
       v
-compare against current truth_claims
+OpenClaw decides relevancy + relationship
       |
+      +--> skip
       +--> supports existing claim
       +--> contradicts existing claim
       +--> refines existing claim
@@ -159,7 +188,7 @@ Railway cron service
 fetch enabled sources
       |
       v
-run Central GBrain truth loop
+OpenClaw decides + runs Central GBrain truth loop
       |
       v
 render digest + update dashboard state
@@ -180,6 +209,9 @@ shared artifact event
       |
       v
 evidence item
+      |
+      v
+OpenClaw decision
       |
       v
 truth loop
@@ -232,6 +264,18 @@ brain_sources (
   created_at timestamptz
 )
 
+openclaw_instances (
+  id uuid primary key,
+  brain_id uuid references brains(id),
+  name text not null,
+  role text not null,
+  endpoint_url text,
+  status text not null,
+  access_scope jsonb not null,
+  last_heartbeat_at timestamptz,
+  created_at timestamptz
+)
+
 ingestion_runs (
   id uuid primary key,
   brain_id uuid references brains(id),
@@ -259,6 +303,23 @@ evidence_items (
   embedding vector(1024),
   content_hash text not null,
   created_at timestamptz
+)
+
+openclaw_decisions (
+  id uuid primary key,
+  brain_id uuid references brains(id),
+  instance_id uuid references openclaw_instances(id),
+  ingestion_run_id uuid references ingestion_runs(id),
+  evidence_id uuid references evidence_items(id),
+  decision_type text not null,
+  subject text not null,
+  rationale text,
+  confidence float,
+  payload jsonb not null,
+  status text not null,
+  created_at timestamptz,
+  applied_at timestamptz,
+  error text
 )
 
 truth_claims (
@@ -321,6 +382,7 @@ Commit types:
 
 - `source_ingested`
 - `evidence_added`
+- `openclaw_decision`
 - `claim_created`
 - `claim_supported`
 - `claim_weakened`
@@ -386,13 +448,26 @@ Recommended hackathon deployment:
 
 - Supabase: Postgres + pgvector
 - Railway web service: Next.js app
-- Railway worker service: ad hoc ingestion/truth loop
+- Railway worker service: OpenClaw head Central GBrain operator
 - Railway cron service: morning Central GBrain update
 
 Railway cron jobs run a command on schedule and are expected to exit. If a
 scheduled run overlaps, Railway skips the new run. The implementation must use
 `ingestion_runs` status plus source-level locking/deduping so skipped or failed
 runs are visible.
+
+The OpenClaw worker should run outside the web process but use the same secured
+backend access:
+
+- Supabase service role key stays server-side in Railway.
+- `LABBRAIN_WORKER_TOKEN` protects the web API hook.
+- `OPENCLAW_HEAD_GBRAIN_URL` points to the external OpenClaw decision endpoint
+  when one exists.
+- `OPENCLAW_HEAD_GBRAIN_TOKEN` authenticates calls to that endpoint.
+
+If the external OpenClaw endpoint is not configured, the worker uses a local
+deterministic policy so the pipeline remains demoable without pretending the
+final OpenClaw runtime is already deployed.
 
 ## Implementation lanes
 
@@ -416,6 +491,7 @@ Files:
 
 - `lib/brain.ts`
 - `lib/truth.ts`
+- `lib/openclaw.ts`
 
 Tasks:
 
@@ -424,6 +500,7 @@ Tasks:
 - create evidence items
 - create brain commits
 - link evidence to claims
+- record OpenClaw decisions before mutating truth
 
 ### Lane C - Source ingestion
 
@@ -474,11 +551,12 @@ Tasks:
 3. Add brain core functions for evidence and commits.
 4. Wire researcher shared artifacts into evidence.
 5. Wire arXiv/paper ingestion into evidence.
-6. Add minimal truth loop:
-   - first pass can create/refine claims with simple LLM output
-   - must still write commits and evidence edges
-7. Update dashboard/digest/onboarding to read from brain state.
-8. Add Railway commands for web, worker, and cron.
+6. Add OpenClaw observe/decide/apply loop.
+7. Add minimal truth loop behind OpenClaw decisions:
+   - first pass can create/refine claims with deterministic or LLM output
+   - must still write decisions, commits, and evidence edges
+8. Update dashboard/digest/onboarding to read from brain state.
+9. Add Railway commands for web, worker, and cron.
 
 ## Test plan
 
@@ -488,6 +566,7 @@ Minimum tests/checks before demo:
 - default brain seed creates one active brain
 - same source item ingested twice creates one evidence item
 - shared researcher artifact creates evidence item and brain commit
+- OpenClaw records a decision before a claim changes
 - morning ingestion creates an `ingestion_run`
 - failed source fetch records `ingestion_runs.error`
 - truth loop never overwrites a claim without a revision and commit
@@ -499,6 +578,7 @@ Minimum tests/checks before demo:
 - Google auth / SSO
 - local PGLite sync
 - revoke-share semantics
+- OpenClaw instances inside individual researcher GBrains
 - full contradiction resolution UI
 - broad news source ranking
 - production eval suite
