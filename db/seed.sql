@@ -33,7 +33,7 @@ insert into brain_sources (brain_id, kind, label, config, cadence)
 select
   brains.id,
   'hog_news',
-  'HOG Hacker News front page',
+  'HOG Hacker News top',
   '{"feed":"top","limit":30}'::jsonb,
   'hourly'
 from brains
@@ -48,7 +48,7 @@ insert into brain_sources (brain_id, kind, label, config, cadence)
 select
   brains.id,
   'arxiv_query',
-  'arXiv cs.LG',
+  'arXiv cat:cs.LG',
   '{"query":"cat:cs.LG","max_results":25}'::jsonb,
   'daily'
 from brains
