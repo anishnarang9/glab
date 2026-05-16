@@ -6,12 +6,14 @@ const requiredFiles = [
   'deploy/railway-morning-cron.json',
   'app/api/health/route.ts',
   'app/api/brain/openclaw/route.ts',
+  'lib/postgres-rest.ts',
   'lib/openclaw.ts',
   'scripts/openclaw-head-gbrain.ts',
   'scripts/openclaw-loop.ts',
 ]
 
 const requiredEnv = [
+  'DATABASE_URL',
   'SUPABASE_URL',
   'SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',

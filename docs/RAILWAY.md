@@ -21,6 +21,7 @@ Current production service names:
 Set these on all three Railway services unless noted:
 
 ```bash
+DATABASE_URL=
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 LABBRAIN_DEFAULT_BRAIN_NAME=LabBrain
@@ -38,6 +39,11 @@ HOG_SECRET_KEY=
 HOG_BASE_URL=https://developer.thehog.ai
 ```
 
+For the current P4 deploy, `DATABASE_URL` should be the Supabase pooler
+Postgres URI. The server code uses it before Supabase REST, so the web service,
+morning cron, and OpenClaw worker still run if the Supabase REST API keys are
+not valid.
+
 Also set this on the web service for browser-safe Supabase use:
 
 ```bash
@@ -53,7 +59,7 @@ OPENCLAW_HEAD_GBRAIN_URL=
 OPENCLAW_HEAD_GBRAIN_TOKEN=
 ```
 
-For P4, `labbrain-openclaw-worker` is the OpenClaw instance. Do not block
+For P4, `awake-purpose` is the Railway OpenClaw worker service. Do not block
 deployment on `OPENCLAW_HEAD_GBRAIN_URL`; that variable only swaps the local
 Railway OpenClaw decision policy for a richer remote decision endpoint later.
 
