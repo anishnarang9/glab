@@ -6,11 +6,16 @@ Research-lab knowledge system. Hackathon build. See [`ARCHITECTURE.md`](./ARCHIT
 
 TypeScript + Bun + Next.js + Supabase. Voyage embeddings (1024 dim). Anthropic LLM judge.
 
-## Setup (P1 to fill in)
+## Setup
 
 ```bash
-cp .env.example .env.local   # then fill in keys
-bun install                  # P1 — once deps are added
+cp .env.example .env.local   # fill in Supabase, Anthropic, Voyage keys
+bun install
+
+# Apply schema + seed to your Supabase project:
+#   Supabase dashboard → SQL editor → paste db/schema.sql → run
+#   then paste db/seed.sql → run
+
 bun dev
 ```
 
