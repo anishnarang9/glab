@@ -2,7 +2,7 @@
 // Export: embed(text: string): Promise<number[]>, embedBatch(texts: string[])
 
 const VOYAGE_API = "https://api.voyageai.com/v1/embeddings";
-const MODEL = "voyage-3-lite";
+const MODEL = "voyage-3"; // voyage-3-lite returns 512 dims; schema requires 1024
 
 async function request(inputs: string[]): Promise<number[][]> {
   const res = await fetch(VOYAGE_API, {
