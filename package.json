@@ -1,0 +1,18 @@
+{
+  "name": "labbrain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "fetch-arxiv": "bun scripts/fetch-arxiv.ts",
+    "match-papers": "bun scripts/match-papers.ts",
+    "render-digest": "bun scripts/render-digest.ts",
+    "send-digest": "bun scripts/send-digest.ts",
+    "seed-corpus": "bun scripts/seed-corpus.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

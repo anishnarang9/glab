@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-**Pre-implementation.** This repo contains the architecture plan for LabBrain (a research-lab knowledge system built on top of gstack GBrain) but no code yet. Before suggesting commands or running tools, check whether scaffolding actually exists — there is no `package.json`, no test runner, no build pipeline as of the initial commit.
+**Scaffolding complete; implementation not started.** The full file/folder tree exists with empty stub files — each stub's top comment names its owner (P1/P2/P3/P4). `package.json`, `tsconfig.json`, `bunfig.toml`, `next.config.ts`, `.env.example`, `.gitignore` are populated with minimal config. `bun install` has not been run; dependencies are empty in `package.json` and must be added by P1 as needed.
 
-The full plan is in `ARCHITECTURE.md`. Read it before proposing implementation changes. The locked decisions below come from a `/plan-eng-review` session and **should not be re-litigated** — propose changes only if implementation surfaces a concrete reason the decision was wrong.
+The full plan is in `ARCHITECTURE.md`. The 4-person work split is in `/Users/raghavaggarwal/.claude/plans/how-can-we-split-modular-russell.md`. The locked decisions below come from a `/plan-eng-review` session and **should not be re-litigated** — propose changes only if implementation surfaces a concrete reason the decision was wrong.
 
 ## Product (one paragraph)
 
@@ -56,6 +56,82 @@ From the architecture plan's risk section — these are the ones most likely to 
 2. **Anthropic / Voyage rate limit on demo day.** Pre-render the digest to disk; only the onboarding Q&A should hit a live API on stage.
 3. **Empty arXiv response.** Pre-cache 2-3 days of papers so the demo doesn't depend on arXiv on the day.
 4. **Sparse GTeam.** Seed ~30-50 shared artifacts before demo, not 3-5. Onboarding query returns nothing on a near-empty store.
+
+## Team roles — work in parallel, merge cleanly
+
+Four roles, each with a non-overlapping set of files. Stub files in the repo are tagged with `P1`/`P2`/`P3`/`P4` in their top-line comment — that comment is the source of truth for ownership. The rule: **only edit files tagged with your role's letter.** Cross-role coupling happens through library exports (contracts below), not by editing each other's files.
+
+### Branching + merge protocol
+
+- Each role works on a branch: `p1-infra`, `p2-web`, `p3-ai`, `p4-cli`.
+- Merge order matters (it matches the dependency chain):
+  1. **P1 merges first** — schema, env, `lib/supabase.ts`. Everyone rebases off main.
+  2. **P4 merges `lib/artifacts.ts` next** — unblocks P2's upload form.
+  3. **P3 merges `lib/embeddings.ts` + `lib/anthropic.ts`** — unblocks P2's onboard route.
+  4. **P2 and the rest of P3/P4 merge in parallel** — no shared files left.
+- Rebase before pushing. Never force-push to main.
+
+### P1 — Infra / DB
+
+Owns scaffolding, Supabase, schema, env, deployment.
+
+**Files:** `package.json`, `tsconfig.json`, `bunfig.toml`, `next.config.ts`, `.env.example`, `.gitignore`, `README.md`, `db/schema.sql`, `db/seed.sql`, `db/client.ts`, `lib/supabase.ts`.
+
+**Exports the team relies on:**
+- `lib/supabase.ts` → `supabaseAdmin()` (service-role client) and `supabaseAnon()` (browser client).
+- `db/client.ts` → typed query helpers if needed.
+
+**Hour 0-2 unblocker:** apply `db/schema.sql` to Supabase, populate `.env.example`, export `lib/supabase.ts`. Push to main. Everyone else is blocked until this lands.
+
+### P2 — Web App
+
+Owns the Next.js routes, API handlers, and React components.
+
+**Files:** everything under `app/` and `components/`.
+
+**Imports from other roles:**
+- `lib/supabase.ts` (P1) — DB access.
+- `lib/artifacts.ts` (P4) — `createArtifact()`, `defaultTierFor(type)` for the upload form checkbox.
+- `lib/embeddings.ts` (P3) — `embed(text)` for the onboarding query.
+- `lib/anthropic.ts` (P3) — `streamChat(messages)` for the streaming Q&A response.
+
+**Can start hour 0:** scaffold UI with mock data. Wire to real libraries as upstream lands.
+
+### P3 — AI Pipeline
+
+Owns embeddings, LLM judge, prompts, and the paper-pipeline scripts.
+
+**Files:** `lib/embeddings.ts`, `lib/anthropic.ts`, `prompts/onboarding-qa.md`, `prompts/relationship-judge.md`, `scripts/fetch-arxiv.ts`, `scripts/match-papers.ts`, `scripts/render-digest.ts`.
+
+**Exports the team relies on:**
+- `lib/embeddings.ts` → `embed(text: string): Promise<number[]>` (1024-dim Voyage `voyage-3-lite`) and `embedBatch(texts: string[])`.
+- `lib/anthropic.ts` → `streamChat(messages)` for the Q&A and `judgeRelationship(paper, project)` returning `{relationship, rationale, confidence}` JSON.
+- `scripts/render-digest.ts` → `renderDigestForResearcher(id: string): string` (P4's `send-digest.ts` imports this).
+
+**Owns the demo's killer-feature risk:** matcher prompt quality. Hand-test the judge on 5 curated `(paper, project)` pairs before demo.
+
+### P4 — CLI + Ingestion + Seeding
+
+Owns artifact rules, the gbrain CLI extension, seed corpus, and digest delivery.
+
+**Files:** `lib/artifacts.ts`, `lib/email.ts`, `scripts/send-digest.ts`, `scripts/seed-corpus.ts`, `cli/gbrain-research.ts`, `cli/share.ts`.
+
+**Exports the team relies on:**
+- `lib/artifacts.ts` → `ArtifactType`, `Tier`, `defaultTierFor(type)`, `createArtifact(input)`, `sharePromptCopy(type)`. P2's upload form depends on this by hour 4.
+- `lib/email.ts` → `sendDigest(to, markdown)` (Resend or console fallback).
+
+**Demo-critical:** seed ~30-50 shared artifacts before demo day or the onboarding query returns nothing.
+
+### Cross-role contracts (don't break these without telling the importers)
+
+| Export | Owner | Importers |
+|--------|-------|-----------|
+| `lib/supabase.ts: supabaseAdmin/supabaseAnon` | P1 | P2, P3, P4 |
+| `lib/artifacts.ts: createArtifact, defaultTierFor` | P4 | P2 |
+| `lib/embeddings.ts: embed, embedBatch` | P3 | P2 (onboarding), P3 (own scripts) |
+| `lib/anthropic.ts: streamChat, judgeRelationship` | P3 | P2 (onboarding), P3 (match-papers) |
+| `scripts/render-digest.ts: renderDigestForResearcher` | P3 | P4 (send-digest) |
+| `lib/email.ts: sendDigest` | P4 | P4 (send-digest) |
 
 ## Skill routing
 

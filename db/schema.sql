@@ -1,0 +1,2 @@
+-- P1 — researchers, artifacts, papers, paper_matches
+-- See ARCHITECTURE.md lines 197-238 for full schema spec.
