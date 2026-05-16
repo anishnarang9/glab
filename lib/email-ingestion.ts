@@ -1,6 +1,6 @@
 import { execFile as execFileCallback } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -257,19 +257,59 @@ async function ensureComposioCli(): Promise<string> {
     throw new Error('Composio CLI is not installed and COMPOSIO_AUTO_INSTALL=false')
   }
 
-  const installDir = process.env.COMPOSIO_INSTALL_DIR?.trim() || join(tmpdir(), 'composio-cli')
-  await execFile('bash', ['-lc', `curl -fsSL https://composio.dev/install | bash -s -- @composio/cli@${COMPOSIO_CLI_VERSION}`], {
-    env: { ...process.env, COMPOSIO_INSTALL_DIR: installDir },
-    maxBuffer: 64 * 1024 * 1024,
-  })
-
-  const installed = localComposioCandidates(installDir).find((path) => existsSync(path))
+  const installed = await installComposioCli()
   if (installed) return installed
 
   const installedOnPath = await commandPath('composio')
   if (installedOnPath) return installedOnPath
 
-  throw new Error(`Composio CLI install completed but executable was not found in ${localComposioCandidates(installDir).join(', ')}`)
+  throw new Error(`Composio CLI install completed but executable was not found in ${localComposioCandidates().join(', ')}`)
+}
+
+async function installComposioCli(): Promise<string> {
+  const installDir = process.env.COMPOSIO_INSTALL_DIR?.trim() || join(tmpdir(), 'composio-cli')
+  await mkdir(installDir, { recursive: true })
+
+  const target = join(installDir, 'composio')
+  const asset = composioAssetName()
+  const zipPath = join(installDir, asset)
+  const url = `https://github.com/ComposioHQ/composio/releases/download/${encodeURIComponent(`@composio/cli@${COMPOSIO_CLI_VERSION}`)}/${asset}`
+  const response = await fetch(url, { headers: { 'User-Agent': 'labbrain-railway-worker' } })
+  if (!response.ok) throw new Error(`Composio CLI download failed: ${response.status} ${response.statusText}`)
+
+  await writeFile(zipPath, Buffer.from(await response.arrayBuffer()))
+  await execFile('unzip', ['-oq', zipPath, '-d', installDir], { maxBuffer: 64 * 1024 * 1024 })
+
+  const binary = await findComposioBinary(installDir)
+  if (!binary) throw new Error(`Composio CLI archive extracted without a composio binary in ${installDir}`)
+
+  if (binary !== target) await copyFile(binary, target)
+  await chmod(target, 0o755)
+  return target
+}
+
+async function findComposioBinary(dir: string): Promise<string | null> {
+  try {
+    const result = await execFile('find', [dir, '-type', 'f', '-name', 'composio'], { maxBuffer: 8 * 1024 * 1024 })
+    return result.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? null
+  } catch {
+    return null
+  }
+}
+
+function composioAssetName(): string {
+  const platform = process.platform
+  const arch = process.arch
+
+  if (platform === 'darwin' && arch === 'arm64') return 'composio-darwin-aarch64.zip'
+  if (platform === 'darwin' && arch === 'x64') return 'composio-darwin-x64.zip'
+  if (platform === 'linux' && arch === 'arm64') return 'composio-linux-aarch64.zip'
+  if (platform === 'linux' && arch === 'x64') return 'composio-linux-x64.zip'
+
+  throw new Error(`Unsupported Composio CLI platform: ${platform}-${arch}`)
 }
 
 async function ensureComposioLogin(composio: string): Promise<void> {
