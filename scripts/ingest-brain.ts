@@ -10,7 +10,7 @@ import {
 } from '@/lib/brain'
 import { supabaseAdmin } from '@/lib/supabase'
 import { maintainTruthFromEvidence } from '@/lib/truth'
-import type { Brain, BrainSource, IngestionRunTrigger, Json, Paper } from '@/db/client'
+import type { Artifact, Brain, BrainSource, IngestionRunTrigger, Json, Paper } from '@/db/client'
 
 type EvidenceSeed = {
   sourceKind: string
@@ -187,7 +187,7 @@ async function sharedArtifactEvidence(brainId: string): Promise<EvidenceSeed[]> 
 
   if (error) throw error
 
-  return data.map((artifact) => ({
+  return data.map((artifact: Artifact) => ({
     sourceKind: 'researcher_shared_artifacts',
     sourceRef: artifact.id,
     title: artifact.title,

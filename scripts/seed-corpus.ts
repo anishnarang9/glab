@@ -179,7 +179,7 @@ function envList(name: string): string[] {
 
 async function resolveOwners(ownerId?: string): Promise<ResearcherRecord[]> {
   if (ownerId) {
-    return [{ id: ownerId, name: "Provided owner", email: "provided-owner@labbrain.local" }];
+    return [{ id: ownerId, name: "Provided owner", email: "provided-owner@labbrain.local", created_at: new Date().toISOString() }];
   }
 
   const existing = await listResearchers();

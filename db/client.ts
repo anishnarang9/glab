@@ -33,6 +33,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['researchers']['Insert']>
+        Relationships: []
       }
       artifacts: {
         Row: {
@@ -58,6 +59,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['artifacts']['Insert']>
+        Relationships: []
       }
       papers: {
         Row: {
@@ -81,6 +83,7 @@ export interface Database {
           ingested_at?: string
         }
         Update: Partial<Database['public']['Tables']['papers']['Insert']>
+        Relationships: []
       }
       paper_matches: {
         Row: {
@@ -104,6 +107,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['paper_matches']['Insert']>
+        Relationships: []
       }
       brains: {
         Row: {
@@ -123,6 +127,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['brains']['Insert']>
+        Relationships: []
       }
       brain_sources: {
         Row: {
@@ -148,6 +153,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['brain_sources']['Insert']>
+        Relationships: []
       }
       ingestion_runs: {
         Row: {
@@ -171,6 +177,7 @@ export interface Database {
           error?: string | null
         }
         Update: Partial<Database['public']['Tables']['ingestion_runs']['Insert']>
+        Relationships: []
       }
       evidence_items: {
         Row: {
@@ -208,6 +215,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['evidence_items']['Insert']>
+        Relationships: []
       }
       truth_claims: {
         Row: {
@@ -231,6 +239,7 @@ export interface Database {
           updated_at?: string
         }
         Update: Partial<Database['public']['Tables']['truth_claims']['Insert']>
+        Relationships: []
       }
       brain_commits: {
         Row: {
@@ -254,6 +263,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['brain_commits']['Insert']>
+        Relationships: []
       }
       truth_revisions: {
         Row: {
@@ -275,6 +285,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['truth_revisions']['Insert']>
+        Relationships: []
       }
       truth_evidence_edges: {
         Row: {
@@ -296,6 +307,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['truth_evidence_edges']['Insert']>
+        Relationships: []
       }
       brain_commit_changes: {
         Row: {
@@ -319,8 +331,13 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['brain_commit_changes']['Insert']>
+        Relationships: []
       }
     }
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
+    CompositeTypes: Record<string, never>
   }
 }
 

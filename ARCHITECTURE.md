@@ -247,6 +247,9 @@ evidence_items (
   id uuid primary key,
   brain_id uuid references brains(id),
   source_id uuid references brain_sources(id),
+  ingestion_run_id uuid references ingestion_runs(id),
+  artifact_id uuid references artifacts(id),
+  paper_id uuid references papers(id),
   source_kind text not null,
   source_ref text,
   title text,
@@ -293,8 +296,10 @@ brain_commits (
   id uuid primary key,
   brain_id uuid references brains(id),
   parent_commit_id uuid references brain_commits(id),
+  ingestion_run_id uuid references ingestion_runs(id),
   kind text not null,
   summary text not null,
+  commit_hash text not null,
   created_at timestamptz
 )
 
