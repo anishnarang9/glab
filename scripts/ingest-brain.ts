@@ -50,6 +50,12 @@ type HogScrapeResult = {
   html?: string
   text?: string
   markdown?: string
+  data?: {
+    content?: string
+    html?: string
+    text?: string
+    markdown?: string
+  }
   operationId?: string
   id?: string
   result?: {
@@ -346,9 +352,10 @@ async function fetchHogStory(id: number): Promise<HogStory> {
 }
 
 async function hogScrapedNewsEvidence(feed: 'top' | 'new' | 'best', limit: number): Promise<EvidenceSeed[]> {
-  const url = `https://news.ycombinator.com/${feed === 'new' ? 'newest' : feed}`
-  const html = await hogScrape(url)
-  const stories = parseHackerNewsHtml(html, limit)
+  const url = feed === 'top' ? 'https://news.ycombinator.com/' : `https://news.ycombinator.com/${feed === 'new' ? 'newest' : feed}`
+  const text = await hogScrape(url)
+  const stories = parseHackerNewsText(text, limit)
+  if (stories.length === 0) return hogFirebaseNewsEvidence(feed, limit)
 
   return stories.map((story) => ({
     sourceKind: 'hog_news',
@@ -362,6 +369,23 @@ async function hogScrapedNewsEvidence(feed: 'top' | 'new' | 'best', limit: numbe
     ].filter(Boolean).join('\n'),
     url: story.url,
     publishedAt: null,
+  }))
+}
+
+async function hogFirebaseNewsEvidence(feed: 'top' | 'new' | 'best', limit: number): Promise<EvidenceSeed[]> {
+  const idsResponse = await fetch(`https://hacker-news.firebaseio.com/v0/${feed}stories.json`)
+  if (!idsResponse.ok) throw new Error(`HOG Hacker News fallback failed: ${idsResponse.status} ${idsResponse.statusText}`)
+
+  const ids = await idsResponse.json() as number[]
+  const stories = await Promise.all(ids.slice(0, limit).map(fetchHogStory))
+
+  return stories.filter(isUsefulHogStory).map((story) => ({
+    sourceKind: 'hog_news',
+    sourceRef: `hn:${story.id}`,
+    title: story.title ?? `Hacker News item ${story.id}`,
+    content: hogStoryContent(story),
+    url: story.url ?? `https://news.ycombinator.com/item?id=${story.id}`,
+    publishedAt: story.time ? new Date(story.time * 1000).toISOString() : null,
   }))
 }
 
@@ -404,7 +428,15 @@ async function pollHogOperation(id: string, maxWaitMs = 30_000): Promise<string>
 }
 
 function hogResultText(data: HogScrapeResult): string {
-  return data.content ?? data.html ?? data.markdown ?? data.text ?? JSON.stringify(data)
+  return data.content ??
+    data.html ??
+    data.markdown ??
+    data.text ??
+    data.data?.content ??
+    data.data?.html ??
+    data.data?.markdown ??
+    data.data?.text ??
+    JSON.stringify(data)
 }
 
 async function markSourceChecked(sourceId: string): Promise<void> {
@@ -498,6 +530,17 @@ function normalizeHogFeed(value: string): 'top' | 'new' | 'best' {
   return 'top'
 }
 
+function parseHackerNewsText(text: string, limit: number): Array<{
+  sourceRef: string
+  title: string
+  url: string
+  points: string | null
+  comments: string | null
+}> {
+  const htmlStories = parseHackerNewsHtml(text, limit)
+  return htmlStories.length > 0 ? htmlStories : parseHackerNewsMarkdown(text, limit)
+}
+
 function parseHackerNewsHtml(html: string, limit: number): Array<{
   sourceRef: string
   title: string
@@ -523,6 +566,35 @@ function parseHackerNewsHtml(html: string, limit: number): Array<{
       comments: commentsMatch ? commentsMatch[1] : null,
     }
   }).filter((story) => story.title.trim().length > 0)
+}
+
+function parseHackerNewsMarkdown(text: string, limit: number): Array<{
+  sourceRef: string
+  title: string
+  url: string
+  points: string | null
+  comments: string | null
+}> {
+  return text
+    .split(/\n(?=\d+\.\n)/)
+    .map((block) => {
+      const id = block.match(/vote\?id=(\d+)/)?.[1] ?? block.match(/item\?id=(\d+)/)?.[1]
+      const storyLink = [...block.matchAll(/\[([^\]\n]{4,220})\]\((https?:\/\/[^)]+)\)/g)]
+        .find((match) => !match[2].includes('news.ycombinator.com'))
+      if (!id || !storyLink) return null
+
+      const points = block.match(/(\d+\s+points?)/)?.[1] ?? null
+      const comments = block.match(/(\d+)[\s\u00a0]+comments/)?.[1] ?? null
+      return {
+        sourceRef: `hn:${id}`,
+        title: cleanXmlText(storyLink[1]),
+        url: storyLink[2],
+        points,
+        comments,
+      }
+    })
+    .filter((story): story is NonNullable<typeof story> => Boolean(story))
+    .slice(0, limit)
 }
 
 function hasHogCredentials(): boolean {
