@@ -4,9 +4,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-**Scaffolding complete; implementation not started.** The full file/folder tree exists with empty stub files — each stub's top comment names its owner (P1/P2/P3/P4). `package.json`, `tsconfig.json`, `bunfig.toml`, `next.config.ts`, `.env.example`, `.gitignore` are populated with minimal config. `bun install` has not been run; dependencies are empty in `package.json` and must be added by P1 as needed.
+**Core implementation complete. Demo-ready pending DB seeding.**
 
-The full plan is in `ARCHITECTURE.md`. The 4-person work split is in `/Users/raghavaggarwal/.claude/plans/how-can-we-split-modular-russell.md`. The locked decisions below come from a `/plan-eng-review` session and **should not be re-litigated** — propose changes only if implementation surfaces a concrete reason the decision was wrong.
+`bun install` has been run. Dependencies include `next`, `react`, `@anthropic-ai/sdk`, `@supabase/supabase-js`, `tailwindcss`, `voyage-3-lite` (called via fetch). Deployed on Vercel at `glab-bay.vercel.app`.
+
+### What's implemented
+
+| File | Status | Notes |
+|------|--------|-------|
+| `db/schema.sql` | ✅ Done | Applied to Supabase |
+| `db/seed.sql` | ✅ Done | 4 researchers seeded (Alice, Bob, Clara, David) |
+| `db/client.ts` | ✅ Done | Full TypeScript types for all 4 tables |
+| `db/match_artifacts.sql` | ✅ Done | pgvector RPC function applied to Supabase |
+| `lib/supabase.ts` | ✅ Done | `supabaseAdmin()` + `supabaseAnon()` |
+| `lib/embeddings.ts` | ✅ Done | `embed()` + `embedBatch()` via Voyage voyage-3-lite |
+| `lib/anthropic.ts` | ✅ Done | `streamChat()` + `judgeRelationship()` |
+| `app/layout.tsx` | ✅ Done | Helvetica Neue font, indigo/lavender theme |
+| `app/page.tsx` | ✅ Done | Landing page — centered search bar, neural background |
+| `app/onboard/page.tsx` | ✅ Done | Streaming Q&A UI with follow-up input |
+| `app/team/page.tsx` | ✅ Done | Researcher grid with projects + matched papers |
+| `app/api/onboard/route.ts` | ✅ Done | Voyage embed → pgvector search → Anthropic stream |
+| `app/api/team/route.ts` | ✅ Done | Fetches researchers + shared projects + paper matches |
+| `components/NeuralBackground.tsx` | ✅ Done | Animated canvas neural network |
+| `components/ResearcherCard.tsx` | ✅ Done | Name, projects, matched papers with relationship badges |
+| `components/PaperMatchCard.tsx` | ✅ Done | Color-coded relationship label + rationale |
+| `scripts/fetch-arxiv.ts` | ✅ Done | Pulls arXiv RSS, embeds, upserts to papers table |
+| `scripts/seed-corpus.ts` | ✅ Done | Reads demo-data md files, embeds, inserts to Supabase |
+| `scripts/match-papers.ts` | ✅ Done | pgvector top-5 + `judgeRelationship()` → paper_matches |
+| `scripts/render-digest.ts` | ✅ Done | Per-researcher markdown digest from paper_matches |
+| `lib/artifacts.ts` | ❌ Stub | Not needed for demo |
+| `lib/email.ts` | ❌ Stub | Not needed for demo (render-digest prints to console) |
+| `scripts/send-digest.ts` | ❌ Stub | Not needed for demo |
+| `cli/gbrain-research.ts` | ❌ Stub | Not needed for demo (seed-corpus replaces it) |
+| `cli/share.ts` | ❌ Stub | Not needed for demo |
+| `app/upload/page.tsx` | ❌ Stub | Skipped — not in demo script |
+| `app/api/upload/route.ts` | ❌ Stub | Skipped — not in demo script |
+
+### To run the demo end-to-end
+
+```bash
+bun scripts/seed-corpus.ts      # insert demo-data artifacts with embeddings
+bun scripts/fetch-arxiv.ts      # pull arXiv papers
+bun scripts/match-papers.ts     # run LLM judge → paper_matches
+bun scripts/render-digest.ts    # preview digest output
+```
+
+The full plan is in `ARCHITECTURE.md`. The locked decisions below come from a `/plan-eng-review` session and **should not be re-litigated** — propose changes only if implementation surfaces a concrete reason the decision was wrong.
 
 ## Product (one paragraph)
 
