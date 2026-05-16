@@ -1,4 +1,3 @@
-// P2 — /team route. SSR list of researchers with current projects + latest matched papers.
 "use client";
 
 import { useEffect, useState } from "react";
@@ -59,8 +58,8 @@ export default function TeamPage() {
           <p className="text-sm text-indigo-300">No researchers found.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {researchers.map((r) => (
-              <ResearcherCard key={r.id} {...r} />
+            {researchers.map((researcher) => (
+              <ResearcherCard key={researcher.id} {...researcher} />
             ))}
           </div>
         )}

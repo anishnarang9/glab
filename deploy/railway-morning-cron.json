@@ -1,0 +1,13 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "bun run typecheck && bun run verify:pipeline"
+  },
+  "deploy": {
+    "startCommand": "bun run brain:morning",
+    "cronSchedule": "0 13 * * *",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}

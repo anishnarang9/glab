@@ -1,53 +1,79 @@
-// P2 — HTTP handler. Joins artifacts + paper_matches per researcher.
-import { supabaseAdmin } from "@/lib/supabase";
-import type { Researcher, Artifact } from "@/db/client";
+import { supabaseAdmin } from '@/lib/supabase'
 
-interface PaperRow {
-  id: string;
-  title: string;
-  authors: string[] | null;
-  arxiv_id: string | null;
-  published_at: string | null;
+type ResearcherRow = {
+  id: string
+  name: string
+  email: string
+  created_at: string
 }
 
-interface MatchRow {
-  id: string;
-  researcher_id: string | null;
-  relationship: string | null;
-  rationale: string | null;
-  confidence: number | null;
-  created_at: string;
-  papers: PaperRow | null;
+type ProjectRow = {
+  id: string
+  owner_id: string | null
+  type: string
+  title: string | null
+  content: string
+}
+
+type MatchRow = {
+  id: string
+  paper_id: string | null
+  researcher_id: string | null
+  relationship: string | null
+  rationale: string | null
+  confidence: number | null
+  created_at: string
+}
+
+type PaperRow = {
+  id: string
+  title: string
+  authors: string[] | null
+  arxiv_id: string | null
+  published_at: string | null
 }
 
 export async function GET() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = supabaseAdmin() as any;
+  const supabase = supabaseAdmin()
 
-  const [{ data: researchers }, { data: artifacts }, { data: matches }] =
-    await Promise.all([
-      supabase.from("researchers").select("*").order("name") as Promise<{ data: Researcher[] }>,
-      supabase
-        .from("artifacts")
-        .select("id, owner_id, type, title, content")
-        .eq("tier", "shared")
-        .eq("type", "project") as Promise<{ data: Pick<Artifact, "id" | "owner_id" | "type" | "title" | "content">[] }>,
-      supabase
-        .from("paper_matches")
-        .select(`id, researcher_id, relationship, rationale, confidence, created_at, papers (id, title, authors, arxiv_id, published_at)`)
-        .order("created_at", { ascending: false }) as Promise<{ data: MatchRow[] }>,
-    ]);
+  const [researchers, projects, matches, papers] = await Promise.all([
+    supabase.from('researchers').select('id, name, email, created_at').order('name'),
+    supabase
+      .from('artifacts')
+      .select('id, owner_id, type, title, content')
+      .eq('tier', 'shared')
+      .eq('type', 'project'),
+    supabase
+      .from('paper_matches')
+      .select('id, paper_id, researcher_id, relationship, rationale, confidence, created_at')
+      .order('created_at', { ascending: false }),
+    supabase.from('papers').select('id, title, authors, arxiv_id, published_at'),
+  ])
 
-  const data = (researchers ?? []).map((r: Researcher) => ({
-    id: r.id,
-    name: r.name,
-    email: r.email,
-    created_at: r.created_at,
-    projects: (artifacts ?? []).filter((a) => a.owner_id === r.id),
-    matches: (matches ?? [])
-      .filter((m: MatchRow) => m.researcher_id === r.id)
-      .slice(0, 3),
-  }));
+  for (const result of [researchers, projects, matches, papers]) {
+    if (result.error) {
+      return Response.json({ error: result.error.message }, { status: 500 })
+    }
+  }
 
-  return Response.json({ researchers: data });
+  const paperById = new Map((papers.data as PaperRow[]).map((paper) => [paper.id, paper]))
+  const sharedProjects = projects.data as ProjectRow[]
+  const paperMatches = matches.data as MatchRow[]
+
+  const data = (researchers.data as ResearcherRow[]).map((researcher) => ({
+    id: researcher.id,
+    name: researcher.name,
+    email: researcher.email,
+    created_at: researcher.created_at,
+    projects: sharedProjects.filter((project) => project.owner_id === researcher.id),
+    matches: paperMatches
+      .filter((match) => match.researcher_id === researcher.id)
+      .slice(0, 3)
+      .map((match) => ({
+        ...match,
+        papers: match.paper_id ? paperById.get(match.paper_id) ?? null : null,
+      })),
+  }))
+
+  return Response.json({ researchers: data })
 }
