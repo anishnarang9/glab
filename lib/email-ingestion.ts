@@ -247,11 +247,8 @@ async function composioExecute(slug: string, data: Record<string, unknown>): Pro
 }
 
 async function ensureComposioCli(): Promise<string> {
-  const configured = process.env.COMPOSIO_CLI_PATH?.trim()
-  if (configured && existsSync(configured)) return configured
-
-  const installed = join(homedir(), '.composio', 'composio')
-  if (existsSync(installed)) return installed
+  const existing = localComposioCandidates().find((path) => existsSync(path))
+  if (existing) return existing
 
   const found = await commandPath('composio')
   if (found) return found
@@ -260,12 +257,19 @@ async function ensureComposioCli(): Promise<string> {
     throw new Error('Composio CLI is not installed and COMPOSIO_AUTO_INSTALL=false')
   }
 
+  const installDir = process.env.COMPOSIO_INSTALL_DIR?.trim() || join(tmpdir(), 'composio-cli')
   await execFile('bash', ['-lc', `curl -fsSL https://composio.dev/install | bash -s -- @composio/cli@${COMPOSIO_CLI_VERSION}`], {
+    env: { ...process.env, COMPOSIO_INSTALL_DIR: installDir },
     maxBuffer: 64 * 1024 * 1024,
   })
 
-  if (existsSync(installed)) return installed
-  throw new Error('Composio CLI install completed but executable was not found')
+  const installed = localComposioCandidates(installDir).find((path) => existsSync(path))
+  if (installed) return installed
+
+  const installedOnPath = await commandPath('composio')
+  if (installedOnPath) return installedOnPath
+
+  throw new Error(`Composio CLI install completed but executable was not found in ${localComposioCandidates(installDir).join(', ')}`)
 }
 
 async function ensureComposioLogin(composio: string): Promise<void> {
@@ -292,8 +296,33 @@ async function commandPath(command: string): Promise<string | null> {
 function composioEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
-    PATH: `${join(homedir(), '.composio')}:${process.env.PATH ?? ''}`,
+    PATH: `${localComposioDirs().join(':')}:${process.env.PATH ?? ''}`,
   }
+}
+
+function localComposioCandidates(extraInstallDir?: string): string[] {
+  return [
+    process.env.COMPOSIO_CLI_PATH?.trim() || null,
+    ...localComposioDirs(extraInstallDir).map((dir) => join(dir, 'composio')),
+  ].filter((path): path is string => Boolean(path))
+}
+
+function localComposioDirs(extraInstallDir?: string): string[] {
+  return [
+    process.env.COMPOSIO_CLI_PATH ? dirnameOfExecutable(process.env.COMPOSIO_CLI_PATH) : null,
+    process.env.COMPOSIO_INSTALL_DIR?.trim() || null,
+    extraInstallDir ?? null,
+    join(tmpdir(), 'composio-cli'),
+    join(homedir(), '.composio'),
+    join(process.cwd(), '.composio'),
+    '/root/.composio',
+    '/app/.composio',
+  ].filter((path): path is string => Boolean(path))
+}
+
+function dirnameOfExecutable(path: string): string {
+  const index = path.lastIndexOf('/')
+  return index === -1 ? '.' : path.slice(0, index)
 }
 
 async function writeComposioArgs(slug: string, data: Record<string, unknown>): Promise<string> {
