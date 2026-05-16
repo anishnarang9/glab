@@ -10,7 +10,7 @@ Current production service names:
 2. `awake-purpose`
    - config file: `deploy/railway-openclaw-worker.json`
    - command: `bun run openclaw:loop`
-   - purpose: polls Composio Gmail ingestion and continuously applies the head Central GBrain OpenClaw operator to pending evidence
+   - purpose: watches Supabase for shared artifacts from smaller GBrains, turns them into Central GBrain evidence, and continuously applies the head OpenClaw operator
 3. `diplomatic-creation`
    - config file: `deploy/railway-morning-cron.json`
    - command: `bun run brain:morning`
@@ -31,20 +31,14 @@ LABBRAIN_WORKER_TOKEN=
 OPENCLAW_OPERATOR_NAME="Glab Head GBrain OpenClaw"
 OPENCLAW_POLL_INTERVAL_MS=60000
 OPENCLAW_PENDING_LIMIT=50
+SUPABASE_SHARED_INGEST_ENABLED=true
+SHARED_ARTIFACT_INGEST_LIMIT=500
 LABBRAIN_ARXIV_QUERY=cat:cs.LG
 LABBRAIN_RSS_FEEDS=
 LABBRAIN_HOG_FEEDS=top,new
 HOG_ACCESS_KEY=
 HOG_SECRET_KEY=
 HOG_BASE_URL=https://developer.thehog.ai
-EMAIL_INGEST_ENABLED=true
-EMAIL_INGEST_MONITORED_ADDRESS=drewmanley16@gmail.com
-EMAIL_INGEST_DEFAULT_TIER=shared
-EMAIL_INGEST_MAX_MESSAGES=25
-EMAIL_INGEST_MARK_READ=true
-COMPOSIO_USER_API_KEY=
-COMPOSIO_ORG=drewmanley16_workspace
-COMPOSIO_AUTO_INSTALL=true
 ```
 
 For the current P4 deploy, `DATABASE_URL` should be the Supabase pooler
@@ -65,16 +59,25 @@ ANTHROPIC_API_KEY=
 VOYAGE_API_KEY=
 OPENCLAW_HEAD_GBRAIN_URL=
 OPENCLAW_HEAD_GBRAIN_TOKEN=
+EMAIL_INGEST_ENABLED=false
+EMAIL_INGEST_MONITORED_ADDRESS=
+EMAIL_INGEST_DEFAULT_TIER=shared
+EMAIL_INGEST_MAX_MESSAGES=100
+EMAIL_INGEST_MARK_READ=true
+COMPOSIO_USER_API_KEY=
+COMPOSIO_ORG=
 ```
 
 For P4, `awake-purpose` is the Railway OpenClaw worker service. Do not block
 deployment on `OPENCLAW_HEAD_GBRAIN_URL`; that variable only swaps the local
 Railway OpenClaw decision policy for a richer remote decision endpoint later.
 
-The `awake-purpose` worker auto-installs the pinned Composio CLI if the binary
-is missing, logs in with `COMPOSIO_USER_API_KEY`, polls Gmail for unread
-researcher-tagged messages, and creates shared artifacts that become Central
-GBrain evidence before OpenClaw runs.
+The `awake-purpose` worker is Supabase-first. Smaller researcher GBrains write
+rows directly into `artifacts` with `tier='shared'`; the worker adopts rows whose
+`brain_id` is either null or the head brain id, creates `evidence_items`, runs
+OpenClaw, writes `truth_claims`/`truth_revisions` as needed, and records
+`brain_commits`. Gmail ingestion is optional and should stay disabled unless the
+demo specifically needs the mailbox path.
 
 ## Setup Steps
 
@@ -86,8 +89,10 @@ GBrain evidence before OpenClaw runs.
 6. Add the environment variables above.
 7. Run the SQL in `db/schema.sql`, then `db/seed.sql`, against Supabase.
 8. Verify `/api/health` returns `{ "ok": true }`.
-9. Trigger `openclaw:pending` or `brain:morning` once and confirm rows appear in:
+9. Insert a shared artifact directly into Supabase or run `brain:morning`, then confirm rows appear in:
+   - `artifacts` with `tier='shared'`
    - `ingestion_runs`
+   - `evidence_items`
    - `openclaw_instances`
    - `openclaw_decisions`
    - `brain_commits`

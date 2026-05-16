@@ -173,7 +173,7 @@ export async function runEmailIngestion(): Promise<EmailIngestionSummary> {
 }
 
 function emailIngestionEnabled(): boolean {
-  return process.env.EMAIL_INGEST_ENABLED === 'true' || Boolean(process.env.COMPOSIO_USER_API_KEY)
+  return process.env.EMAIL_INGEST_ENABLED === 'true'
 }
 
 async function fetchCandidateEmails(researchers: ResearcherRecord[]): Promise<GmailMessage[]> {

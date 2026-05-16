@@ -3,6 +3,7 @@
 import { ensureDefaultBrain } from '@/lib/brain'
 import { runEmailIngestion } from '@/lib/email-ingestion'
 import { ensureHeadGBrainOpenClaw, runOpenClawOnPendingEvidence } from '@/lib/openclaw'
+import { runSharedArtifactIngestion } from '@/lib/shared-artifact-ingestion'
 
 async function main(): Promise<void> {
   const intervalMs = readIntervalMs()
@@ -12,6 +13,12 @@ async function main(): Promise<void> {
 
   while (true) {
     try {
+      const sharedSummary = await runSharedArtifactIngestion({ trigger: 'openclaw_worker' })
+      if (sharedSummary.enabled && (sharedSummary.ingested > 0 || sharedSummary.errors.length > 0)) {
+        console.log(`Shared artifact ingestion: scanned=${sharedSummary.scanned} pending=${sharedSummary.pending} ingested=${sharedSummary.ingested} skipped=${sharedSummary.skipped}`)
+        for (const message of sharedSummary.errors) console.error(`Shared artifact ingestion error: ${message}`)
+      }
+
       const emailSummary = await runEmailIngestion()
       if (emailSummary.enabled && (emailSummary.ingested > 0 || emailSummary.errors.length > 0)) {
         console.log(`Email ingestion: ingested=${emailSummary.ingested} skipped=${emailSummary.skipped} marked_read=${emailSummary.markedRead}`)

@@ -206,7 +206,9 @@ The brain also updates during the day.
 researcher shares from sub-GBrain
       |
       v
-shared artifact event
+Supabase artifacts row
+  tier='shared'
+  brain_id=null or head brain id
       |
       v
 evidence item
@@ -222,6 +224,13 @@ brain_commit
 ```
 
 The user-facing feeling should be: "the lab brain just learned something."
+
+For P4, the live path is Supabase-first. Smaller researcher GBrains do not run
+OpenClaw and do not mutate truth directly. They write shared data into
+`artifacts`; the head Central GBrain worker watches those rows, adopts any
+unassigned shared artifacts, dedupes by evidence content hash, writes
+`evidence_items`, lets OpenClaw decide relevancy, then records every accepted or
+skipped change as `brain_commits`.
 
 ## Data model
 
@@ -522,13 +531,16 @@ Tasks:
 Files:
 
 - `lib/artifacts.ts`
+- `lib/shared-artifact-ingestion.ts`
 - `cli/gbrain-research.ts`
 - `cli/share.ts`
 
 Tasks:
 
 - private artifacts remain researcher-owned
-- shared artifacts become evidence for the Central GBrain
+- shared artifacts written directly to Supabase become evidence for the Central GBrain
+- unassigned shared artifacts (`brain_id is null`) are adopted by the head brain
+- duplicate shared artifacts are skipped by artifact id or content hash
 - sharing creates a brain commit
 
 ### Lane E - Product surfaces

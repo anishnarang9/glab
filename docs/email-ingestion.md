@@ -1,8 +1,15 @@
-# Email Ingestion — Feature Spec
+# Email Ingestion — Optional Feature Spec
+
+**Status:** optional path. The primary P4 live-ingestion path is now
+Supabase-direct shared artifacts from smaller GBrains; see
+`docs/supabase-shared-ingestion.md`.
 
 ## What this does
 
-Researchers can email `.md` files to a monitored Gmail address and they are automatically ingested into LabBrain's central Supabase database as artifacts. No CLI, no upload form — just send an email from your phone or desktop and the knowledge lands in the brain.
+Researchers can email `.md` files to a monitored Gmail address and have them
+ingested into LabBrain's central Supabase database as artifacts. This is useful
+for demos, but it is not the main product path. Smaller GBrains should write
+shared artifacts directly to Supabase.
 
 **Monitored inbox:** `drewmanley16@gmail.com`
 
@@ -21,7 +28,10 @@ Researchers can email `.md` files to a monitored Gmail address and they are auto
 
 ### Gmail polling via Composio
 
-A script (`scripts/ingest-email.ts`) polls the Gmail inbox every N minutes through the Composio CLI. The always-on OpenClaw Railway worker (`awake-purpose`) also calls the same ingestion code inside `scripts/openclaw-loop.ts`, so one worker both watches email and applies OpenClaw decisions to new evidence.
+A script (`scripts/ingest-email.ts`) can poll the Gmail inbox through Composio
+when `EMAIL_INGEST_ENABLED=true`. The always-on OpenClaw Railway worker
+(`awake-purpose`) keeps this disabled by default so the production path remains
+Supabase-first.
 
 **Why Composio CLI polling over direct Gmail OAuth:** the monitored Gmail account is already connected in Composio, so the worker can call Gmail tools without storing Google OAuth client secrets in this repo.
 
@@ -35,7 +45,7 @@ Gmail inbox (drewmanley16@gmail.com)
       2. download .md attachment(s) OR use email body as content
       3. extract title from filename or subject line
       4. insert through lib/artifacts.ts as a researcher artifact
-      5. if shared, create Central GBrain evidence and OpenClaw decision immediately
+      5. if shared, create a Supabase artifact that the Central GBrain worker can ingest
       6. mark email as read after successful ingestion
 ```
 
@@ -83,10 +93,10 @@ Add to `package.json`:
 
 ```
 # Composio Gmail ingestion
-EMAIL_INGEST_ENABLED=true
+EMAIL_INGEST_ENABLED=false
 EMAIL_INGEST_MONITORED_ADDRESS=drewmanley16@gmail.com
 EMAIL_INGEST_DEFAULT_TIER=shared
-EMAIL_INGEST_MAX_MESSAGES=25
+EMAIL_INGEST_MAX_MESSAGES=100
 EMAIL_INGEST_MARK_READ=true
 COMPOSIO_USER_API_KEY=
 COMPOSIO_ORG=drewmanley16_workspace
@@ -101,7 +111,7 @@ COMPOSIO_ORG=drewmanley16_workspace
 bun run email:ingest
 ```
 
-**Production / demo setup:**
+**Production / demo setup, only if explicitly enabling email:**
 ```bash
 # awake-purpose runs this continuously:
 bun run openclaw:loop

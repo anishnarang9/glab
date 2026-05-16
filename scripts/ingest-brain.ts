@@ -11,6 +11,7 @@ import {
 } from '@/lib/brain'
 import { supabaseAdmin } from '@/lib/supabase'
 import { runOpenClawOnEvidence } from '@/lib/openclaw'
+import { runSharedArtifactIngestion } from '@/lib/shared-artifact-ingestion'
 import type { Artifact, Brain, BrainSource, IngestionRunTrigger, Json, Paper } from '@/db/client'
 
 type EvidenceSeed = {
@@ -77,8 +78,13 @@ export async function runCentralGBrainIngestion(trigger: IngestionRunTrigger = p
     return 0
   }
 
-  let createdEvidence = 0
-  for (const source of sources) {
+  const sharedArtifacts = await runSharedArtifactIngestion({ trigger })
+  if (sharedArtifacts.errors.length > 0) {
+    console.error(`Shared artifact ingestion errors: ${sharedArtifacts.errors.join('; ')}`)
+  }
+
+  let createdEvidence = sharedArtifacts.ingested
+  for (const source of sources.filter((source) => source.kind !== 'researcher_shared_artifacts')) {
     createdEvidence += await ingestSource(brain, source, trigger)
   }
 

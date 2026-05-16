@@ -7,8 +7,9 @@ understanding changes. OpenClaw is the head operator that decides which evidence
 is relevant and how it should update shared truth.
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the current Central GBrain plan,
-[`docs/RAILWAY.md`](./docs/RAILWAY.md) for deployment setup, and [`CLAUDE.md`](./CLAUDE.md)
-for coding guidance.
+[`docs/supabase-shared-ingestion.md`](./docs/supabase-shared-ingestion.md) for the
+small-GBrain-to-head-GBrain intake contract, [`docs/RAILWAY.md`](./docs/RAILWAY.md)
+for deployment setup, and [`CLAUDE.md`](./CLAUDE.md) for coding guidance.
 
 ## Stack
 
@@ -46,7 +47,7 @@ bun run ci               # typecheck, static pipeline verification, production b
 ```
 app/         Next.js routes + API handlers
 components/  React components
-lib/         Supabase, Central GBrain, OpenClaw, truth, artifact, email helpers
+lib/         Supabase, Central GBrain, OpenClaw, truth, artifact, shared-ingestion helpers
 db/          schema, seed, typed database contract
 prompts/     Q&A, relationship judge, truth-maintenance prompts
 scripts/     source ingestion, truth loop, digest rendering/sending
@@ -55,6 +56,6 @@ cli/         researcher GBrain sharing helpers
 
 The old "shared rows equal GTeam" plan is superseded. Shared researcher artifacts
 are now inputs into the Central GBrain, not the source of truth itself.
-Smaller researcher GBrains do not run OpenClaw in this architecture; they send
-shared data into the head Central GBrain, and the head OpenClaw operator controls
-truth maintenance there.
+Smaller researcher GBrains do not run OpenClaw in this architecture; they write
+shared artifacts directly into Supabase, and the head OpenClaw operator controls
+truth maintenance from there.
