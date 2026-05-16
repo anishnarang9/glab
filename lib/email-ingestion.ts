@@ -55,6 +55,10 @@ type GmailMessage = {
   attachmentList?: GmailAttachment[]
   attachment_list?: GmailAttachment[]
   payload?: GmailPayloadPart
+  preview?: {
+    body?: string
+    subject?: string
+  }
 }
 
 type EmailArtifactCandidate = {
@@ -65,6 +69,54 @@ type EmailArtifactCandidate = {
   type: ArtifactType
   tier: Tier
 }
+
+type ComposioApiContext = {
+  baseUrl: string
+  userApiKey: string
+  orgId: string
+  projectId: string
+  consumerUserId: string
+}
+
+type ComposioApiSessionInfo = {
+  project?: {
+    org?: {
+      id?: string
+    }
+  }
+}
+
+type ComposioConsumerProject = {
+  org_id?: string
+  project_nano_id?: string
+  consumer_user_id?: string
+}
+
+type ComposioConnectedAccount = {
+  id?: string
+  is_disabled?: boolean
+  status?: string
+  toolkit?: {
+    slug?: string
+  }
+}
+
+type ComposioConnectedAccountsResponse = {
+  items?: ComposioConnectedAccount[]
+}
+
+type ComposioToolRouterSession = {
+  session_id?: string
+}
+
+type ComposioToolRouterExecution = {
+  data?: Record<string, unknown>
+  error?: string | null
+  log_id?: string
+}
+
+let composioApiContextPromise: Promise<ComposioApiContext> | null = null
+const composioApiSessionPromises = new Map<string, Promise<string>>()
 
 export type EmailIngestionSummary = {
   enabled: boolean
@@ -126,13 +178,13 @@ function emailIngestionEnabled(): boolean {
 
 async function fetchCandidateEmails(researchers: ResearcherRecord[]): Promise<GmailMessage[]> {
   const query = process.env.EMAIL_INGEST_QUERY?.trim() || defaultGmailQuery(researchers)
-  const maxResults = readIntEnv('EMAIL_INGEST_MAX_MESSAGES', 25, 1, 100)
+  const maxResults = readIntEnv('EMAIL_INGEST_MAX_MESSAGES', 100, 1, 500)
   const result = await composioExecute('GMAIL_FETCH_EMAILS', {
     query,
     max_results: maxResults,
-    include_payload: true,
+    include_payload: false,
     include_spam_trash: false,
-    verbose: true,
+    verbose: false,
   })
 
   return normalizeMessages(result)
@@ -156,8 +208,11 @@ async function candidateFromMessage(
   const owner = ownerForMessage(subject, message, researchers)
   if (!owner) return null
 
-  const contents = await markdownContents(message)
-  const content = contents.length > 0 ? contents.join('\n\n---\n\n') : cleanText(readString(message.messageText ?? message.message_text))
+  const fullMessage = await hydrateMessage(message)
+  const contents = await markdownContents(fullMessage)
+  const content = contents.length > 0
+    ? contents.join('\n\n---\n\n')
+    : cleanText(readString(fullMessage.messageText ?? fullMessage.message_text ?? fullMessage.preview?.body))
   if (!content || content.length < 20) return null
 
   return {
@@ -168,6 +223,26 @@ async function candidateFromMessage(
     type: typeFromSubject(subject),
     tier: tierFromSubject(subject),
   }
+}
+
+async function hydrateMessage(message: GmailMessage): Promise<GmailMessage> {
+  if (hasFullMessageContent(message)) return message
+
+  const messageId = readString(message.messageId ?? message.message_id ?? message.id)
+  if (!messageId) return message
+
+  const result = await composioExecute('GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID', {
+    message_id: messageId,
+    format: 'full',
+    user_id: 'me',
+  })
+  const data = asObject(result.data ?? result)
+  return { ...message, ...data }
+}
+
+function hasFullMessageContent(message: GmailMessage): boolean {
+  const attachments = message.attachmentList ?? message.attachment_list ?? []
+  return Boolean(message.payload || message.messageText || message.message_text || attachments.length > 0)
 }
 
 async function markdownContents(message: GmailMessage): Promise<string[]> {
@@ -236,6 +311,10 @@ function shouldMarkRead(): boolean {
 }
 
 async function composioExecute(slug: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+  if (shouldUseComposioApi()) {
+    return composioExecuteApi(slug, data)
+  }
+
   const composio = await ensureComposioCli()
   await ensureComposioLogin(composio)
 
@@ -245,6 +324,212 @@ async function composioExecute(slug: string, data: Record<string, unknown>): Pro
     maxBuffer: 64 * 1024 * 1024,
   })
   return parseComposioOutput(result.stdout)
+}
+
+function shouldUseComposioApi(): boolean {
+  return Boolean(process.env.COMPOSIO_USER_API_KEY?.trim()) && process.env.COMPOSIO_USE_CLI !== 'true'
+}
+
+async function composioExecuteApi(slug: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const toolkit = toolkitFromSlug(slug)
+  const [context, sessionId] = await Promise.all([
+    resolveComposioApiContext(),
+    resolveComposioApiSession(toolkit),
+  ])
+
+  const result = await composioApiFetch<ComposioToolRouterExecution>(
+    context,
+    `/api/v3.1/tool_router/session/${encodeURIComponent(sessionId)}/execute`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        tool_slug: slug,
+        arguments: data,
+      }),
+    },
+  )
+
+  if (result.error) throw new Error(`Composio ${slug} failed: ${result.error}`)
+  return {
+    successful: true,
+    data: result.data ?? {},
+    error: null,
+    logId: result.log_id ?? '',
+  }
+}
+
+async function resolveComposioApiContext(): Promise<ComposioApiContext> {
+  composioApiContextPromise ??= resolveComposioApiContextInner()
+  return composioApiContextPromise
+}
+
+async function resolveComposioApiContextInner(): Promise<ComposioApiContext> {
+  const userApiKey = process.env.COMPOSIO_USER_API_KEY?.trim()
+  if (!userApiKey) throw new Error('COMPOSIO_USER_API_KEY is required for Composio API execution')
+
+  const baseUrl = process.env.COMPOSIO_BASE_URL?.trim() || 'https://backend.composio.dev'
+  const sessionInfo = await composioUserApiFetch<ComposioApiSessionInfo>(baseUrl, userApiKey, '/api/v3/auth/session/info')
+  const orgId = process.env.COMPOSIO_ORG_ID?.trim() || sessionInfo.project?.org?.id
+  if (!orgId) throw new Error('Could not resolve Composio org id from COMPOSIO_USER_API_KEY')
+
+  const consumerProject = await composioUserApiFetch<ComposioConsumerProject>(
+    baseUrl,
+    userApiKey,
+    '/api/v3/org/consumer/project/resolve',
+    {
+      method: 'POST',
+      headers: { 'x-org-id': orgId },
+      body: '{}',
+    },
+  )
+
+  const projectId = process.env.COMPOSIO_PROJECT_ID?.trim() || consumerProject.project_nano_id
+  const consumerUserId = process.env.COMPOSIO_CONSUMER_USER_ID?.trim() || consumerProject.consumer_user_id
+  if (!projectId || !consumerUserId) {
+    throw new Error('Could not resolve Composio consumer project/user for Gmail ingestion')
+  }
+
+  return {
+    baseUrl,
+    userApiKey,
+    orgId: consumerProject.org_id || orgId,
+    projectId,
+    consumerUserId,
+  }
+}
+
+async function resolveComposioApiSession(toolkit: string): Promise<string> {
+  const existing = composioApiSessionPromises.get(toolkit)
+  if (existing) return existing
+
+  const promise = resolveComposioApiSessionInner(toolkit)
+  composioApiSessionPromises.set(toolkit, promise)
+  return promise
+}
+
+async function resolveComposioApiSessionInner(toolkit: string): Promise<string> {
+  const context = await resolveComposioApiContext()
+  const connectedAccountId = await resolveConnectedAccountId(context, toolkit)
+  const connectedAccounts = connectedAccountId ? { [toolkit]: connectedAccountId } : undefined
+
+  const session = await composioApiFetch<ComposioToolRouterSession>(context, '/api/v3.1/tool_router/session', {
+    method: 'POST',
+    body: JSON.stringify({
+      user_id: context.consumerUserId,
+      connected_accounts: connectedAccounts,
+      manage_connections: { enable: true },
+      toolkits: { enable: [toolkit] },
+    }),
+  })
+
+  if (!session.session_id) throw new Error(`Composio did not return a Tool Router session for ${toolkit}`)
+  return session.session_id
+}
+
+async function resolveConnectedAccountId(context: ComposioApiContext, toolkit: string): Promise<string | null> {
+  const query = new URLSearchParams({
+    user_ids: context.consumerUserId,
+    statuses: 'ACTIVE',
+    toolkit_slugs: toolkit,
+    limit: '100',
+  })
+  const accounts = await composioApiFetch<ComposioConnectedAccountsResponse>(
+    context,
+    `/api/v3.1/connected_accounts?${query.toString()}`,
+    { method: 'GET' },
+  )
+
+  const account = (accounts.items ?? []).find((item) => {
+    return item.id && item.status === 'ACTIVE' && !item.is_disabled && item.toolkit?.slug?.toLowerCase() === toolkit
+  })
+  return account?.id ?? null
+}
+
+async function composioUserApiFetch<T>(
+  baseUrl: string,
+  userApiKey: string,
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  return composioFetch<T>(baseUrl, path, {
+    ...init,
+    headers: {
+      'x-user-api-key': userApiKey,
+      ...(init.headers ?? {}),
+    },
+  })
+}
+
+async function composioApiFetch<T>(
+  context: ComposioApiContext,
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  return composioFetch<T>(context.baseUrl, path, {
+    ...init,
+    headers: {
+      'x-user-api-key': context.userApiKey,
+      'x-org-id': context.orgId,
+      'x-project-id': context.projectId,
+      ...(init.headers ?? {}),
+    },
+  })
+}
+
+async function composioFetch<T>(baseUrl: string, path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    redirect: 'error',
+    headers: {
+      'User-Agent': '@composio/cli',
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(init.headers ?? {}),
+    },
+  })
+
+  const text = await response.text()
+  const body = text ? safeJsonParse(text) : {}
+  if (!response.ok) {
+    throw new Error(`Composio API ${response.status} ${response.statusText}: ${composioErrorMessage(body)}`)
+  }
+
+  return body as T
+}
+
+function toolkitFromSlug(slug: string): string {
+  return slug.split('_')[0]?.toLowerCase() || 'gmail'
+}
+
+function safeJsonParse(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return value
+  }
+}
+
+function composioErrorMessage(body: unknown): string {
+  if (isObject(body)) {
+    const error = asObject(body.error)
+    return readString(error.message) || readString(body.message) || JSON.stringify(redactComposioError(body)).slice(0, 500)
+  }
+  return String(body).slice(0, 500)
+}
+
+function redactComposioError(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactComposioError)
+  if (!isObject(value)) return value
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      const normalized = key.toLowerCase()
+      if (normalized.includes('token') || normalized.includes('key') || normalized.includes('secret')) {
+        return [key, '[redacted]']
+      }
+      return [key, redactComposioError(entry)]
+    }),
+  )
 }
 
 async function ensureComposioCli(): Promise<string> {
