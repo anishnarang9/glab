@@ -33,6 +33,18 @@ type ArxivEntry = {
   publishedAt: string | null
 }
 
+type HogStory = {
+  id: number
+  title?: string
+  url?: string
+  by?: string
+  score?: number
+  descendants?: number
+  time?: number
+  text?: string
+  type?: string
+}
+
 export async function runCentralGBrainIngestion(trigger: IngestionRunTrigger = parseTrigger()): Promise<number> {
   const brain = await ensureDefaultBrain()
   await ensureConfiguredSources(brain)
@@ -98,6 +110,17 @@ async function ensureConfiguredSources(brain: Brain): Promise<void> {
       label: url,
       config: { url },
       cadence: 'daily',
+    })
+  }
+
+  const hogFeeds = splitEnv(process.env.LABBRAIN_HOG_FEEDS)
+  for (const feed of hogFeeds.length ? hogFeeds : ['top']) {
+    await ensureBrainSource({
+      brainId: brain.id,
+      kind: 'hog_news',
+      label: `HOG Hacker News ${feed}`,
+      config: { feed, limit: 30 },
+      cadence: 'hourly',
     })
   }
 }
@@ -181,6 +204,8 @@ async function evidenceForSource(brain: Brain, source: BrainSource): Promise<Evi
       return rssEvidence(source.config)
     case 'web_page':
       return webPageEvidence(source.config)
+    case 'hog_news':
+      return hogNewsEvidence(source.config)
     case 'manual_upload':
       return []
   }
@@ -278,6 +303,32 @@ async function webPageEvidence(config: Json): Promise<EvidenceSeed[]> {
   }))
 }
 
+async function hogNewsEvidence(config: Json): Promise<EvidenceSeed[]> {
+  const cfg = asObject(config)
+  const feed = normalizeHogFeed(typeof cfg.feed === 'string' ? cfg.feed : 'top')
+  const limit = clampLimit(typeof cfg.limit === 'number' ? cfg.limit : 30, 1, 100)
+  const idsResponse = await fetch(`https://hacker-news.firebaseio.com/v0/${feed}stories.json`)
+  if (!idsResponse.ok) throw new Error(`HOG Hacker News fetch failed: ${idsResponse.status} ${idsResponse.statusText}`)
+
+  const ids = await idsResponse.json() as number[]
+  const stories = await Promise.all(ids.slice(0, limit).map(fetchHogStory))
+
+  return stories.filter(isUsefulHogStory).map((story) => ({
+    sourceKind: 'hog_news',
+    sourceRef: `hn:${story.id}`,
+    title: story.title ?? `Hacker News item ${story.id}`,
+    content: hogStoryContent(story),
+    url: story.url ?? `https://news.ycombinator.com/item?id=${story.id}`,
+    publishedAt: story.time ? new Date(story.time * 1000).toISOString() : null,
+  }))
+}
+
+async function fetchHogStory(id: number): Promise<HogStory> {
+  const response = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
+  if (!response.ok) throw new Error(`HOG Hacker News item ${id} fetch failed: ${response.status} ${response.statusText}`)
+  return await response.json() as HogStory
+}
+
 async function markSourceChecked(sourceId: string): Promise<void> {
   const { error } = await supabaseAdmin()
     .from('brain_sources')
@@ -361,6 +412,34 @@ function requireConfigString(config: Record<string, Json>, key: string): string 
   const value = config[key]
   if (typeof value !== 'string' || value.trim() === '') throw new Error(`Missing source config string: ${key}`)
   return value
+}
+
+function normalizeHogFeed(value: string): 'top' | 'new' | 'best' {
+  if (value === 'new') return 'new'
+  if (value === 'best') return 'best'
+  return 'top'
+}
+
+function clampLimit(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min
+  return Math.max(min, Math.min(max, Math.floor(value)))
+}
+
+function isUsefulHogStory(story: HogStory): boolean {
+  return story.type === 'story' && typeof story.title === 'string' && story.title.trim().length > 0
+}
+
+function hogStoryContent(story: HogStory): string {
+  const parts = [
+    `Hacker News ${story.type ?? 'story'}: ${story.title ?? `item ${story.id}`}`,
+    story.url ? `URL: ${story.url}` : null,
+    story.by ? `Author: ${story.by}` : null,
+    typeof story.score === 'number' ? `Score: ${story.score}` : null,
+    typeof story.descendants === 'number' ? `Comments: ${story.descendants}` : null,
+    story.text ? cleanXmlText(story.text) : null,
+  ].filter(Boolean)
+
+  return parts.join('\n')
 }
 
 function splitEnv(value: string | undefined): string[] {

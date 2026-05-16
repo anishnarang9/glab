@@ -1,7 +1,7 @@
 # LabBrain
 
 Central GBrain for research labs. The product is a persistent brain entity that
-ingests papers, news, web sources, and shared researcher updates; maintains
+ingests papers, HOG/news feeds, web sources, and shared researcher updates; maintains
 evidence-backed truth claims; and emits mini git-like commits whenever its
 understanding changes. OpenClaw is the head operator that decides which evidence
 is relevant and how it should update shared truth.

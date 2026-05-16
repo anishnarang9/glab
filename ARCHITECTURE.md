@@ -21,7 +21,7 @@ Supabase is the memory store. The Central GBrain is the product.
 
 ```
                          live external sources
-                    arXiv / RSS / news / web pages
+                    arXiv / RSS / HOG / news / web pages
                                   |
                                   v
 Researcher GBrains -----> evidence queue
@@ -30,7 +30,7 @@ Researcher GBrains -----> evidence queue
  notes/findings       OpenClaw head operator
                                   |
 live sources ---------------------+
-arXiv / RSS / news / web          |
+arXiv / RSS / HOG / news / web    |
                                   v
                          Central GBrain -----> onboarding answers
                               |                 team dashboard
@@ -77,6 +77,7 @@ A `brain_source` tells the brain where to learn from. Sources include:
 - `arxiv_query`
 - `rss_feed`
 - `web_page`
+- `hog_news`
 - `researcher_shared_artifacts`
 - `manual_upload`
 
@@ -194,8 +195,8 @@ OpenClaw decides + runs Central GBrain truth loop
 render digest + update dashboard state
 ```
 
-This run is broad. It checks arXiv, RSS/news, configured web pages, and any
-source whose cadence says it should be refreshed.
+This run is broad. It checks arXiv, RSS/news, HOG feeds, configured web pages,
+and any source whose cadence says it should be refreshed.
 
 ### Mid-day commit
 
@@ -255,7 +256,7 @@ brains (
 brain_sources (
   id uuid primary key,
   brain_id uuid references brains(id),
-  kind text not null,
+  kind text not null, -- arxiv_query, rss_feed, web_page, hog_news, researcher_shared_artifacts, manual_upload
   label text not null,
   config jsonb not null,
   cadence text not null,

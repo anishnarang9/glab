@@ -30,7 +30,7 @@ Central GBrain is the brain entity for a lab/topic.
 
 ```text
 researcher GBrains ─┐
-arXiv / news / web ─┼──▶ evidence queue ───▶ OpenClaw head operator
+arXiv / HOG / web ─┼──▶ evidence queue ───▶ OpenClaw head operator
 manual uploads    ─┘                                  │
                                                       ▼
                                              Central GBrain
@@ -159,6 +159,8 @@ Prefer parallel work only when lanes do not touch the same module.
 6. **Railway cron overlap/skips hide work.** Make ingestion idempotent and visible.
 7. **OpenClaw becomes hand-wavy.** Persist `openclaw_decisions` and make truth
    mutations depend on those decisions.
+8. **HOG becomes just another feed.** Keep it as a first-class `hog_news` source
+   so broad world/tech signal is visible in source configs and commits.
 
 ## Commands
 

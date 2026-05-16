@@ -72,7 +72,7 @@ alter table artifacts
 create table brain_sources (
   id              uuid primary key default gen_random_uuid(),
   brain_id        uuid references brains(id) on delete cascade,
-  kind            text not null check (kind in ('arxiv_query', 'rss_feed', 'web_page', 'researcher_shared_artifacts', 'manual_upload')),
+  kind            text not null check (kind in ('arxiv_query', 'rss_feed', 'web_page', 'hog_news', 'researcher_shared_artifacts', 'manual_upload')),
   label           text not null,
   config          jsonb not null default '{}'::jsonb,
   cadence         text not null default 'manual' check (cadence in ('manual', 'hourly', 'daily')),

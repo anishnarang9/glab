@@ -32,6 +32,21 @@ on conflict (brain_id, kind, label) do nothing;
 insert into brain_sources (brain_id, kind, label, config, cadence)
 select
   brains.id,
+  'hog_news',
+  'HOG Hacker News front page',
+  '{"feed":"top","limit":30}'::jsonb,
+  'hourly'
+from brains
+where brains.name = 'LabBrain'
+on conflict (brain_id, kind, label) do update
+set
+  config = excluded.config,
+  cadence = excluded.cadence,
+  enabled = true;
+
+insert into brain_sources (brain_id, kind, label, config, cadence)
+select
+  brains.id,
   'arxiv_query',
   'arXiv cs.LG',
   '{"query":"cat:cs.LG","max_results":25}'::jsonb,

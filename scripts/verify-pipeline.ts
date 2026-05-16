@@ -25,6 +25,7 @@ const schemaTokens = [
   'create table openclaw_decisions',
   'openclaw_worker',
   'openclaw_decision',
+  'hog_news',
 ]
 
 const packageScripts = [

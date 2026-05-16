@@ -33,6 +33,7 @@ OPENCLAW_POLL_INTERVAL_MS=60000
 OPENCLAW_PENDING_LIMIT=50
 LABBRAIN_ARXIV_QUERY=cat:cs.LG
 LABBRAIN_RSS_FEEDS=
+LABBRAIN_HOG_FEEDS=top,new
 ```
 
 Also set this on the web service for browser-safe Supabase use:
