@@ -10,7 +10,7 @@ Current production service names:
 2. `awake-purpose`
    - config file: `deploy/railway-openclaw-worker.json`
    - command: `bun run openclaw:loop`
-   - purpose: continuously applies the head Central GBrain OpenClaw operator to pending evidence
+   - purpose: polls Composio Gmail ingestion and continuously applies the head Central GBrain OpenClaw operator to pending evidence
 3. `diplomatic-creation`
    - config file: `deploy/railway-morning-cron.json`
    - command: `bun run brain:morning`
@@ -37,6 +37,14 @@ LABBRAIN_HOG_FEEDS=top,new
 HOG_ACCESS_KEY=
 HOG_SECRET_KEY=
 HOG_BASE_URL=https://developer.thehog.ai
+EMAIL_INGEST_ENABLED=true
+EMAIL_INGEST_MONITORED_ADDRESS=drewmanley16@gmail.com
+EMAIL_INGEST_DEFAULT_TIER=shared
+EMAIL_INGEST_MAX_MESSAGES=25
+EMAIL_INGEST_MARK_READ=true
+COMPOSIO_USER_API_KEY=
+COMPOSIO_ORG=drewmanley16_workspace
+COMPOSIO_AUTO_INSTALL=true
 ```
 
 For the current P4 deploy, `DATABASE_URL` should be the Supabase pooler
@@ -62,6 +70,11 @@ OPENCLAW_HEAD_GBRAIN_TOKEN=
 For P4, `awake-purpose` is the Railway OpenClaw worker service. Do not block
 deployment on `OPENCLAW_HEAD_GBRAIN_URL`; that variable only swaps the local
 Railway OpenClaw decision policy for a richer remote decision endpoint later.
+
+The `awake-purpose` worker auto-installs the pinned Composio CLI if the binary
+is missing, logs in with `COMPOSIO_USER_API_KEY`, polls Gmail for unread
+researcher-tagged messages, and creates shared artifacts that become Central
+GBrain evidence before OpenClaw runs.
 
 ## Setup Steps
 

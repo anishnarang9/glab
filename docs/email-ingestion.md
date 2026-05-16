@@ -19,23 +19,24 @@ Researchers can email `.md` files to a monitored Gmail address and they are auto
 
 ## Technical approach
 
-### Gmail polling via Gmail API
+### Gmail polling via Composio
 
-A script (`scripts/ingest-email.ts`) polls the Gmail inbox every N minutes using the Gmail API with OAuth2 service account credentials.
+A script (`scripts/ingest-email.ts`) polls the Gmail inbox every N minutes through the Composio CLI. The always-on OpenClaw Railway worker (`awake-purpose`) also calls the same ingestion code inside `scripts/openclaw-loop.ts`, so one worker both watches email and applies OpenClaw decisions to new evidence.
 
-**Why polling over webhooks:** simpler for hackathon scope — no public webhook URL required, no Pub/Sub setup.
+**Why Composio CLI polling over direct Gmail OAuth:** the monitored Gmail account is already connected in Composio, so the worker can call Gmail tools without storing Google OAuth client secrets in this repo.
 
 **Flow:**
 
 ```
 Gmail inbox (drewmanley16@gmail.com)
-  → poll for unread emails with .md attachments or markdown body
+  → Composio Gmail fetch for unread researcher-tagged messages
   → for each new email:
       1. parse researcher ID from subject tag e.g. [alice]
       2. download .md attachment(s) OR use email body as content
       3. extract title from filename or subject line
-      4. insert into artifacts table (tier: 'private' by default)
-      5. mark email as read / label it "ingested"
+      4. insert through lib/artifacts.ts as a researcher artifact
+      5. if shared, create Central GBrain evidence and OpenClaw decision immediately
+      6. mark email as read after successful ingestion
 ```
 
 ### Supabase mapping
@@ -45,9 +46,9 @@ Gmail inbox (drewmanley16@gmail.com)
 | Subject (after tag) | `title` |
 | `.md` attachment content / body | `content` |
 | Researcher tag in subject `[alice]` | `owner_id` (lookup by name) |
-| Default | `type: 'note'`, `tier: 'private'` |
+| Default | `type: 'note'`, `tier: 'shared'` |
 
-To make an artifact shared with the lab, researcher includes `[shared]` in the subject:
+For the demo, email to the monitored lab inbox is treated as explicit sharing into the Central GBrain by default. To force private storage, include `[private]` in the subject. To be explicit about sharing, include `[shared]`:
 ```
 Subject: [alice][shared] my findings on hyperalignment v2
 ```
@@ -61,44 +62,35 @@ Subject: [alice][shared] my findings on hyperalignment v2
 Owned by P1/P4. Needs:
 
 ```typescript
-// Key dependencies
-import { google } from 'googleapis'          // Gmail API
-import { supabaseAdmin } from '@/lib/supabase'
+// Key integration
+import { runEmailIngestion } from '@/lib/email-ingestion'
 
 // Steps:
-// 1. Auth with Gmail API using OAuth2 credentials
-// 2. List unread messages matching query: "has:attachment filename:.md OR label:inbox"
-// 3. For each message: get attachment, decode base64, parse markdown
-// 4. Lookup researcher by tag → get owner_id from researchers table
-// 5. Insert artifact via supabaseAdmin()
-// 6. Mark message read
+// 1. Ensure Composio CLI is installed and logged in
+// 2. Fetch unread Gmail messages matching researcher tags
+// 3. Decode .md attachment(s), or use email body markdown
+// 4. Lookup researcher by subject tag or sender email
+// 5. Insert via createArtifact()
+// 6. Mark message read after successful ingestion
 ```
 
 Add to `package.json`:
 ```json
-"ingest-email": "bun scripts/ingest-email.ts"
+"email:ingest": "bun scripts/ingest-email.ts"
 ```
 
 ### New env vars (add to `.env.example`)
 
 ```
-# Gmail ingestion
-GMAIL_CLIENT_ID=
-GMAIL_CLIENT_SECRET=
-GMAIL_REFRESH_TOKEN=
-GMAIL_MONITORED_ADDRESS=drewmanley16@gmail.com
+# Composio Gmail ingestion
+EMAIL_INGEST_ENABLED=true
+EMAIL_INGEST_MONITORED_ADDRESS=drewmanley16@gmail.com
+EMAIL_INGEST_DEFAULT_TIER=shared
+EMAIL_INGEST_MAX_MESSAGES=25
+EMAIL_INGEST_MARK_READ=true
+COMPOSIO_USER_API_KEY=
+COMPOSIO_ORG=drewmanley16_workspace
 ```
-
-### Getting Gmail OAuth credentials
-
-1. Go to Google Cloud Console → APIs & Services → Credentials
-2. Create OAuth 2.0 Client ID (Desktop app)
-3. Enable Gmail API
-4. Run one-time OAuth flow to get refresh token:
-   ```
-   bun scripts/gmail-auth.ts   # one-time setup helper
-   ```
-5. Paste the refresh token into `.env.local`
 
 ---
 
@@ -106,13 +98,13 @@ GMAIL_MONITORED_ADDRESS=drewmanley16@gmail.com
 
 **One-shot (manual trigger):**
 ```bash
-bun run ingest-email
+bun run email:ingest
 ```
 
-**On a cron (production / demo setup):**
+**Production / demo setup:**
 ```bash
-# every 5 minutes via cron or Vercel cron job
-*/5 * * * * cd /path/to/project && bun run ingest-email
+# awake-purpose runs this continuously:
+bun run openclaw:loop
 ```
 
 ---
@@ -125,7 +117,7 @@ For the demo, send a `.md` file to the inbox live on stage:
 2. Attach a `.md` file (e.g. `experiment-findings.md`)
 3. Subject: `[alice] new visual cortex findings`
 4. Send
-5. Run `bun run ingest-email` in terminal
+5. Run `bun run email:ingest` in terminal, or wait for `awake-purpose`
 6. Refresh `/team` — Alice's new artifact appears instantly
 
 This makes the "living brain" aspect visceral — the audience watches knowledge flow in real time.
@@ -134,7 +126,7 @@ This makes the "living brain" aspect visceral — the audience watches knowledge
 
 ## Open questions
 
-- [ ] Do we run this as a Vercel cron route (`app/api/ingest-email/route.ts`) or a standalone script?
-- [ ] Should the email body itself be ingested if no `.md` attachment is present?
-- [ ] Who sets up the Gmail OAuth credentials? (P1 owns the env, should own this setup)
-- [ ] Rate limit: Gmail API free tier allows 1B quota units/day — polling every 5 min is well within limits
+- [x] Do we run this as a Vercel cron route (`app/api/ingest-email/route.ts`) or a standalone script? Standalone script inside the Railway worker.
+- [x] Should the email body itself be ingested if no `.md` attachment is present? Yes, if the subject maps to a researcher.
+- [x] Who sets up Gmail credentials? Composio owns Gmail auth; Railway only needs the Composio user API key and org.
+- [ ] Do we want a dedicated Gmail label after ingestion, or is removing `UNREAD` enough for the demo?

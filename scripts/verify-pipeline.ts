@@ -8,6 +8,8 @@ const requiredFiles = [
   'app/api/brain/openclaw/route.ts',
   'lib/postgres-rest.ts',
   'lib/openclaw.ts',
+  'lib/email-ingestion.ts',
+  'scripts/ingest-email.ts',
   'scripts/openclaw-head-gbrain.ts',
   'scripts/openclaw-loop.ts',
 ]
@@ -20,6 +22,9 @@ const requiredEnv = [
   'LABBRAIN_DEFAULT_BRAIN_NAME',
   'OPENCLAW_OPERATOR_NAME',
   'LABBRAIN_WORKER_TOKEN',
+  'EMAIL_INGEST_ENABLED',
+  'EMAIL_INGEST_MONITORED_ADDRESS',
+  'COMPOSIO_USER_API_KEY',
 ]
 
 const schemaTokens = [
@@ -38,6 +43,7 @@ const packageScripts = [
   'brain:morning',
   'openclaw:worker',
   'openclaw:loop',
+  'email:ingest',
 ]
 
 async function main(): Promise<void> {

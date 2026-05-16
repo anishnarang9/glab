@@ -20,7 +20,8 @@
     "brain:morning": "bun scripts/ingest-brain.ts --trigger morning_cron",
     "openclaw:worker": "bun scripts/openclaw-head-gbrain.ts",
     "openclaw:pending": "bun scripts/openclaw-head-gbrain.ts --pending-only",
-    "openclaw:loop": "bun scripts/openclaw-loop.ts"
+    "openclaw:loop": "bun scripts/openclaw-loop.ts",
+    "email:ingest": "bun scripts/ingest-email.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.54.0",

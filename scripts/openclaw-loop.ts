@@ -1,6 +1,7 @@
 // Long-running Railway worker loop for the head Central GBrain OpenClaw operator.
 
 import { ensureDefaultBrain } from '@/lib/brain'
+import { runEmailIngestion } from '@/lib/email-ingestion'
 import { ensureHeadGBrainOpenClaw, runOpenClawOnPendingEvidence } from '@/lib/openclaw'
 
 async function main(): Promise<void> {
@@ -11,6 +12,12 @@ async function main(): Promise<void> {
 
   while (true) {
     try {
+      const emailSummary = await runEmailIngestion()
+      if (emailSummary.enabled && (emailSummary.ingested > 0 || emailSummary.errors.length > 0)) {
+        console.log(`Email ingestion: ingested=${emailSummary.ingested} skipped=${emailSummary.skipped} marked_read=${emailSummary.markedRead}`)
+        for (const message of emailSummary.errors) console.error(`Email ingestion error: ${message}`)
+      }
+
       const brain = await ensureDefaultBrain()
       const operator = await ensureHeadGBrainOpenClaw(brain.id)
       const processed = await runOpenClawOnPendingEvidence({ brain, limit })
