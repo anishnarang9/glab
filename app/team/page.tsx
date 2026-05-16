@@ -47,10 +47,12 @@ export default function TeamPage() {
 
       <div className="flex-1 w-full max-w-5xl mx-auto px-6 py-10 relative z-10">
         {loading ? (
-          <div className="flex items-center gap-2 text-indigo-300 text-sm">
-            <span className="synapse-dot w-1.5 h-1.5 rounded-full bg-indigo-400 block" />
-            <span className="synapse-dot w-1.5 h-1.5 rounded-full bg-indigo-400 block" style={{ animationDelay: "0.3s" }} />
-            <span className="synapse-dot w-1.5 h-1.5 rounded-full bg-indigo-400 block" style={{ animationDelay: "0.6s" }} />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex items-center gap-2">
+              <span className="synapse-dot w-1.5 h-1.5 rounded-full bg-indigo-400 block" />
+              <span className="synapse-dot w-1.5 h-1.5 rounded-full bg-indigo-400 block" style={{ animationDelay: "0.3s" }} />
+              <span className="synapse-dot w-1.5 h-1.5 rounded-full bg-indigo-400 block" style={{ animationDelay: "0.6s" }} />
+            </div>
           </div>
         ) : researchers.length === 0 ? (
           <p className="text-sm text-indigo-300">No researchers found.</p>
