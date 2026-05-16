@@ -14,6 +14,8 @@
     "seed-corpus": "bun scripts/seed-corpus.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.54.0",
+    "@supabase/supabase-js": "^2.50.0",
     "next": "^16.2.6",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
