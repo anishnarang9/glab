@@ -1,16 +1,17 @@
 # Railway Deployment Plan
 
-LabBrain should run as three Railway services from the same GitHub repo:
+LabBrain should run as three Railway services from the same GitHub repo.
+Current production service names:
 
-1. `labbrain-web`
+1. `efficient-motivation`
    - config file: `deploy/railway-web.json`
    - command: `bun run start`
    - health check: `/api/health`
-2. `labbrain-openclaw-worker`
+2. `awake-purpose`
    - config file: `deploy/railway-openclaw-worker.json`
    - command: `bun run openclaw:loop`
    - purpose: continuously applies the head Central GBrain OpenClaw operator to pending evidence
-3. `labbrain-morning-cron`
+3. `diplomatic-creation`
    - config file: `deploy/railway-morning-cron.json`
    - command: `bun run brain:morning`
    - cron: `0 13 * * *`
