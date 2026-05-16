@@ -1,9 +1,9 @@
 /**
  * fetch-arxiv.ts
  *
- * Runs targeted arXiv searches for each researcher's domain via The Hog
- * web scraper, parses results, dedupes, and upserts into the central
- * Supabase `papers` table.
+ * Scrapes publication pages of leading neuroscience labs using The Hog
+ * web scraper API. Targets labs relevant to each researcher's domain,
+ * extracts paper metadata, and upserts into the central Supabase papers table.
  *
  * Usage: bun fetch-arxiv
  * Env:   HOG_ACCESS_KEY, HOG_SECRET_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -21,20 +21,21 @@ const HOG_HEADERS = {
   'Content-Type': 'application/json',
 }
 
-// One search query per researcher domain — results are pre-targeted to the lab.
-const LAB_SEARCH_QUERIES = [
-  // Alice — fMRI decoding, visual representations
-  'fMRI decoding visual cortex object recognition CLIP neural representations',
-  'cross-subject brain decoding hyperalignment representational similarity',
-  // Bob — connectomics, synaptic structure
-  'electron microscopy connectome synaptic connectivity cortex excitatory inhibitory',
-  'dense reconstruction neural circuits synapse layer cortex',
-  // Clara — motor BCI, neural prosthetics
-  'intracortical brain computer interface motor cortex decoding Utah array',
-  'neural population dynamics motor preparation rotational trajectory BCI',
+// Leading labs per researcher domain
+const LAB_PAGES = [
+  // Alice — fMRI, visual cortex, neural decoding
+  { lab: 'Kanwisher / EvLab (MIT)',     url: 'https://evlab.mit.edu/publications/' },
+  { lab: 'DiCarlo Lab (MIT)',            url: 'http://dicarlolab.mit.edu/publications' },
+  { lab: 'Huth Lab (UT Austin)',         url: 'https://www.cs.utexas.edu/~huth/publications.html' },
+  // Bob — connectomics, electron microscopy
+  { lab: 'Seung Lab (Princeton)',        url: 'https://seunglab.org/research/' },
+  { lab: 'Lee Lab (Harvard)',            url: 'https://www.leelab.net/publications' },
+  // Clara — motor BCI, population dynamics
+  { lab: 'Churchland Lab (Columbia)',   url: 'https://churchlandlab.neuroscience.columbia.edu/publications' },
+  { lab: 'Shenoy Lab (Stanford)',        url: 'https://shenoylab.stanford.edu/publications' },
   // David — mean-field theory, criticality, oscillations
-  'mean field theory cortical network criticality excitatory inhibitory balance',
-  'neural oscillations gamma theta coupling recurrent network dynamics',
+  { lab: 'Brunel Lab (Duke)',            url: 'https://brunel.neuroscience.duke.edu/publications' },
+  { lab: 'Bhatt Lab (Harvard)',          url: 'https://bhatt.hms.harvard.edu/publications' },
 ]
 
 // ─── Hog scraper ─────────────────────────────────────────────────────────────
@@ -43,68 +44,104 @@ async function hogScrape(url: string): Promise<string> {
   const res = await fetch(`${HOG_BASE}/api/v1/platform/scrapers/web/scrape`, {
     method: 'POST',
     headers: HOG_HEADERS,
-    body: JSON.stringify({ url, renderJs: false }),
+    body: JSON.stringify({ url, renderJs: true }),
   })
-  if (!res.ok) throw new Error(`Hog scrape error ${res.status}: ${await res.text()}`)
+  if (!res.ok) throw new Error(`Hog ${res.status}: ${await res.text()}`)
   const data = await res.json()
 
   const opId = data.operationId ?? data.id
   if (opId) return pollOperation(opId)
-  return data.content ?? data.html ?? JSON.stringify(data)
+  return data.content ?? data.html ?? data.text ?? JSON.stringify(data)
 }
 
-async function pollOperation(id: string, maxWaitMs = 30_000): Promise<string> {
+async function pollOperation(id: string, maxWaitMs = 45_000): Promise<string> {
   const deadline = Date.now() + maxWaitMs
   while (Date.now() < deadline) {
-    await sleep(2000)
+    await sleep(3000)
     const res = await fetch(`${HOG_BASE}/api/operations/${id}`, { headers: HOG_HEADERS })
-    if (!res.ok) throw new Error(`Poll ${id} failed: ${res.status}`)
+    if (!res.ok) throw new Error(`Poll ${id}: ${res.status}`)
     const data = await res.json()
-    if (data.status === 'completed') return data.result?.content ?? data.result?.html ?? ''
-    if (data.status === 'failed') throw new Error(`Operation ${id} failed`)
+    if (data.status === 'completed') return data.result?.content ?? data.result?.html ?? data.result?.text ?? ''
+    if (data.status === 'failed') throw new Error(`Op ${id} failed: ${JSON.stringify(data.error)}`)
   }
-  throw new Error(`Operation ${id} timed out`)
+  throw new Error(`Op ${id} timed out`)
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-// ─── arXiv parsing ────────────────────────────────────────────────────────────
+// ─── Paper extraction ─────────────────────────────────────────────────────────
+// Lab websites have wildly different HTML — use heuristics that work broadly:
+// 1. Find year headings (2020–2026) and group text beneath them
+// 2. Extract paper-shaped text (title-like strings near PDF/DOI links)
 
 interface RawPaper {
-  arxiv_id: string
   title: string
-  abstract: string
-  authors: string[]
+  authors: string
+  year: number | null
+  url: string | null
+  lab: string
 }
 
-function parseArxivSearchPage(html: string): RawPaper[] {
+function extractPapers(html: string, labName: string): RawPaper[] {
   const papers: RawPaper[] = []
-  const resultBlocks = [...html.matchAll(/<li class="arxiv-result">([\s\S]*?)<\/li>/g)]
 
-  for (const [, block] of resultBlocks) {
-    const idMatch = block.match(/abs\/(\d{4}\.\d{4,5})/)
-    if (!idMatch) continue
-    const arxiv_id = idMatch[1]
+  // Strip tags, collapse whitespace for text-based heuristics
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
 
-    const titleMatch = block.match(/<p class="title[^"]*">([\s\S]*?)<\/p>/)
-    const title = titleMatch ? strip(titleMatch[1]) : ''
+  // Strategy: find PDF/DOI/abstract links and grab surrounding context as title
+  const linkPattern = /https?:\/\/\S*(arxiv\.org\/abs|doi\.org|pubmed|pdf)\S*/gi
+  const linkMatches = [...html.matchAll(new RegExp(linkPattern.source, 'gi'))]
+
+  const usedOffsets = new Set<number>()
+
+  for (const match of linkMatches) {
+    const linkUrl = match[0]
+    const offset = match.index ?? 0
+
+    // Extract a ~600 char window around the link from the raw HTML
+    const window = html.slice(Math.max(0, offset - 500), offset + 100)
+    const windowText = window
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    // Avoid grabbing the same region twice
+    const bucket = Math.floor(offset / 300)
+    if (usedOffsets.has(bucket)) continue
+    usedOffsets.add(bucket)
+
+    // Title heuristic: longest sentence-like segment in the window
+    const sentences = windowText.split(/\.\s+/)
+    const title = sentences
+      .filter(s => s.length > 20 && s.length < 300 && /[A-Z]/.test(s[0] ?? ''))
+      .sort((a, b) => b.length - a.length)[0]
+      ?.trim()
+
     if (!title) continue
 
-    const abstractMatch = block.match(/<span class="abstract-full[^"]*">([\s\S]*?)<\/span>/)
-    const abstract = abstractMatch
-      ? strip(abstractMatch[1]).replace(/^Abstract:\s*/i, '')
-      : ''
+    // Year — look for 4-digit year in window
+    const yearMatch = windowText.match(/\b(20\d{2})\b/)
+    const year = yearMatch ? parseInt(yearMatch[1]) : null
 
-    const authorMatches = [...block.matchAll(/<a href="\/search[^"]*">([^<]+)<\/a>/g)]
-    const authors = authorMatches.map(m => m[1].trim()).filter(Boolean)
+    // Authors — text before the title that looks like a name list
+    const authorMatch = windowText.match(/([A-Z][a-z]+ [A-Z][a-z]+(?:,\s*[A-Z][a-z]+ [A-Z][a-z]+){1,8})/)
+    const authors = authorMatch?.[1] ?? ''
 
-    papers.push({ arxiv_id, title, abstract: abstract || title, authors })
+    papers.push({ title, authors, year, url: linkUrl, lab: labName })
   }
-  return papers
-}
 
-function strip(s: string): string {
-  return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  // Dedupe by title similarity
+  const seen = new Set<string>()
+  return papers.filter(p => {
+    const key = p.title.toLowerCase().slice(0, 60)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -115,38 +152,44 @@ async function main() {
   if (missing.length) throw new Error(`Missing env vars: ${missing.join(', ')}`)
 
   const db = supabaseAdmin()
-  const seen = new Set<string>()
-  const papers: RawPaper[] = []
+  const allPapers: RawPaper[] = []
+  const seenTitles = new Set<string>()
 
-  for (const query of LAB_SEARCH_QUERIES) {
-    const url = `https://arxiv.org/search/?searchtype=all&query=${encodeURIComponent(query)}&order=-announced_date_first&start=0`
-    console.log(`\nSearching: "${query.slice(0, 70)}"`)
+  for (const { lab, url } of LAB_PAGES) {
+    console.log(`\nScraping: ${lab}`)
+    console.log(`  ${url}`)
 
     try {
       const html = await hogScrape(url)
-      const results = parseArxivSearchPage(html)
-      console.log(`  ${results.length} results`)
+      const papers = extractPapers(html, lab)
+      console.log(`  Found ${papers.length} papers`)
 
-      for (const p of results) {
-        if (!seen.has(p.arxiv_id)) {
-          seen.add(p.arxiv_id)
-          papers.push(p)
+      for (const p of papers) {
+        const key = p.title.toLowerCase().slice(0, 60)
+        if (!seenTitles.has(key)) {
+          seenTitles.add(key)
+          allPapers.push(p)
+          console.log(`    [${p.year ?? '?'}] ${p.title.slice(0, 70)}`)
         }
       }
     } catch (err) {
-      console.error(`  Failed:`, err)
+      console.error(`  Failed: ${err instanceof Error ? err.message : err}`)
     }
   }
 
-  console.log(`\nTotal unique papers: ${papers.length}`)
-  if (!papers.length) return
+  console.log(`\nTotal unique papers: ${allPapers.length}`)
+  if (!allPapers.length) {
+    console.log('Nothing to upsert.')
+    return
+  }
 
-  const rows: PaperInsert[] = papers.map(p => ({
-    arxiv_id: p.arxiv_id,
+  // Use title-derived ID since we don't have arxiv IDs for all lab papers
+  const rows: PaperInsert[] = allPapers.map(p => ({
+    arxiv_id: slugify(p.title),   // stable synthetic ID
     title: p.title,
-    abstract: p.abstract,
-    authors: p.authors,
-    published_at: null,
+    abstract: `From ${p.lab}. ${p.authors ? `Authors: ${p.authors}.` : ''}`.trim(),
+    authors: p.authors ? p.authors.split(/,\s*/) : [],
+    published_at: p.year ? `${p.year}-01-01T00:00:00Z` : null,
   }))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -161,6 +204,10 @@ async function main() {
   }
 
   console.log(`Upserted ${rows.length} papers into central DB.`)
+}
+
+function slugify(title: string): string {
+  return 'lab-' + title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 80)
 }
 
 main().catch(err => { console.error(err); process.exit(1) })
