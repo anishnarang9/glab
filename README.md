@@ -6,8 +6,9 @@ evidence-backed truth claims; and emits mini git-like commits whenever its
 understanding changes. OpenClaw is the head operator that decides which evidence
 is relevant and how it should update shared truth.
 
-See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the current Central GBrain plan and
-[`CLAUDE.md`](./CLAUDE.md) for coding guidance.
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the current Central GBrain plan,
+[`docs/RAILWAY.md`](./docs/RAILWAY.md) for deployment setup, and [`CLAUDE.md`](./CLAUDE.md)
+for coding guidance.
 
 ## Stack
 
@@ -36,6 +37,8 @@ bun run brain:ingest     # run the central ingestion/truth loop once
 bun run brain:morning    # morning scheduled run for Railway cron
 bun run openclaw:worker  # Railway worker: ingest sources, then apply OpenClaw decisions
 bun run openclaw:pending # apply OpenClaw to pending evidence only
+bun run openclaw:loop    # long-running Railway worker loop
+bun run ci               # typecheck, static pipeline verification, production build
 ```
 
 ## Layout
