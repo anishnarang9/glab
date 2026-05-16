@@ -1,152 +1,197 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file guides coding agents working in this repository.
 
 ## Project state
 
-**Scaffolding complete; implementation not started.** The full file/folder tree exists with empty stub files — each stub's top comment names its owner (P1/P2/P3/P4). `package.json`, `tsconfig.json`, `bunfig.toml`, `next.config.ts`, `.env.example`, `.gitignore` are populated with minimal config. `bun install` has not been run; dependencies are empty in `package.json` and must be added by P1 as needed.
+The architecture has been reset. The old plan treated `artifacts.tier='shared'`
+as the shared lab brain. That is superseded.
 
-The full plan is in `ARCHITECTURE.md`. The 4-person work split is in `/Users/raghavaggarwal/.claude/plans/how-can-we-split-modular-russell.md`. The locked decisions below come from a `/plan-eng-review` session and **should not be re-litigated** — propose changes only if implementation surfaces a concrete reason the decision was wrong.
+The product center is now **Central GBrain**: a persistent brain entity that
+ingests new research data, maintains evidence-backed truth claims, and writes
+mini git-like commits whenever its understanding changes.
 
-## Product (one paragraph)
+Current branch: `P4An`.
 
-LabBrain has three use cases, all shipped thin in v1:
-1. **Onboarding** — new researcher queries the lab's history and active projects.
-2. **Staying current** — daily email digest of new arXiv papers with claim-level annotation per researcher (`validates` / `suggests_change` / `extends` / `scoops` / `orthogonal`) + rationale.
-3. **Team visibility** — web dashboard showing what each lab member is working on.
+Important current state:
 
-**Target shape: hackathon demo, not a production system.** Engineer for "the 6-beat demo script in ARCHITECTURE.md works end-to-end." Skip production-grade auth, sync pipelines, multi-tenancy, eval suites.
+- P1 infra has merged into `main`: Supabase schema, typed DB contract, deps.
+- This branch may contain WIP from the old P4 plan in `lib/artifacts.ts`,
+  `lib/email.ts`, and `scripts/seed-corpus.ts`; adapt it to Central GBrain.
+- Do not keep building the old "shared rows are the central truth" model.
 
-## Locked architectural decisions
+## Product model
+
+Central GBrain is the brain entity for a lab/topic.
+
+```text
+researcher GBrains ─┐
+arXiv / news / web ─┼──▶ Central GBrain ───▶ onboarding answers
+manual uploads    ─┘          │             ├──▶ team dashboard
+                              │             └──▶ digests / alerts
+                              ▼
+                    truth claims + evidence + commits
+```
+
+Researcher GBrains are sub-identities. They can keep private artifacts, or
+explicitly share an artifact into the Central GBrain. Shared artifacts become
+evidence, not final truth.
+
+## Locked decisions
 
 | ID | Decision |
 |----|----------|
-| D1 | All three use cases ship thin in v1 — none gets full depth. |
-| D2 | Per-researcher "GBrain" = existing gstack GBrain CLI, extended with research-artifact ingestion. Do NOT rebuild vector store / MCP / sync from scratch. |
-| D3 | Privacy = opt-in. `artifacts.tier` defaults to `'private'`; the user must explicitly tag `'shared'` for an artifact to reach lab-wide queries. |
-| D4 | Storage = **single Supabase Postgres** with a `tier` column on every artifact (collapsed from the production "local PGLite + cloud GTeam" design for hackathon scope). No real sync pipeline. |
-| D3a | GTeam seeded at lab setup by ingesting PI-provided sources (lab webpage, prior pubs, grant abstracts). Ongoing growth via smart "Share with lab?" prompt at artifact creation. |
-| D5 | Single-node deployment. No SaaS infrastructure, no self-host story. |
-| D6 | Paper-to-work matching is two-stage: **pgvector top-5 cosine prefilter** → **Anthropic LLM judge per (paper, project) pair** producing JSON `{relationship, rationale, confidence}`. Real-time API, not batch. |
-| D10 | Three surfaces only: gbrain CLI (ingestion), Next.js web app (3 routes: `/upload`, `/onboard`, `/team`), email digest (rendered markdown). No Slack, no IDE plugin, no browser extension. |
-| D11 | Stack: TypeScript + Bun + Next.js + Supabase. One language end-to-end. |
-| D11a | Embeddings: Voyage AI (`voyage-3` or `voyage-3-lite`), **1024 dimensions**. Lock this at hour 0 — dimension mismatch mid-build forces re-embedding. |
-
-## Explicitly NOT in scope
-
-These were considered and deferred. Don't add them without checking first.
-
-- Real auth (Google SSO, RLS, roles, multi-lab)
-- A sync pipeline for local → cloud (D4 was collapsed to one DB)
-- Slack / Notion / Google Drive / Zotero ingestion adapters
-- Self-host packaging
-- Eval suite for the matcher (hand-test 5 curated pairs instead)
-- Anthropic batch API (volumes are tiny — pay the real-time premium)
-- Broad test coverage; performance optimization
+| D1 | The Central GBrain is first-class. Supabase stores its memory; Supabase is not the product. |
+| D2 | Every meaningful brain update writes a `brain_commit`. New evidence must not silently overwrite truth. |
+| D3 | Truth maintenance is essential: evidence can support, contradict, refine, duplicate, or be orthogonal to claims. |
+| D4 | Researcher privacy stays opt-in. `artifacts.tier='shared'` feeds the Central GBrain; private artifacts stay private. |
+| D5 | Morning runs are one trigger, not the whole architecture. Mid-day researcher shares also create commits. |
+| D6 | First deployment target: Supabase + Railway web service + Railway worker/cron. |
+| D7 | Voyage embeddings remain 1024-dimensional unless the whole schema and stored vectors are migrated. |
+| D8 | First pass should be complete enough to show evidence, claims, commits, and digest/dashboard output. Do not overbuild multi-lab auth/sync. |
 
 ## Data model
 
-The hackathon schema lives in the `## Data model (hackathon-grade)` section of `ARCHITECTURE.md`. Four tables: `researchers`, `artifacts` (with `tier` + `type` + `embedding`), `papers`, `paper_matches`. The `vector(1024)` dimension MUST match Voyage's output — do not change without re-embedding.
+Base tables from P1:
 
-## Hackathon failure modes to actively defend against
+- `researchers`
+- `artifacts`
+- `papers`
+- `paper_matches`
 
-From the architecture plan's risk section — these are the ones most likely to bite:
+Central GBrain additions:
 
-1. **Matcher prompt quality.** The relationship taxonomy is the demo's punchline. Hand-test on 5 curated (paper, project) pairs before demo. Watch for the judge defaulting to `orthogonal` when unsure — lower the confidence instead.
-2. **Anthropic / Voyage rate limit on demo day.** Pre-render the digest to disk; only the onboarding Q&A should hit a live API on stage.
-3. **Empty arXiv response.** Pre-cache 2-3 days of papers so the demo doesn't depend on arXiv on the day.
-4. **Sparse GTeam.** Seed ~30-50 shared artifacts before demo, not 3-5. Onboarding query returns nothing on a near-empty store.
+- `brains`
+- `brain_sources`
+- `ingestion_runs`
+- `evidence_items`
+- `truth_claims`
+- `truth_revisions`
+- `truth_evidence_edges`
+- `brain_commits`
+- `brain_commit_changes`
 
-## Team roles — work in parallel, merge cleanly
+Table meanings:
 
-Four roles, each with a non-overlapping set of files. Stub files in the repo are tagged with `P1`/`P2`/`P3`/`P4` in their top-line comment — that comment is the source of truth for ownership. The rule: **only edit files tagged with your role's letter.** Cross-role coupling happens through library exports (contracts below), not by editing each other's files.
+- `artifacts`: researcher-owned input; `shared` artifacts feed the brain.
+- `papers`: raw paper records; paper abstracts can become evidence.
+- `evidence_items`: immutable-ish facts/snippets the brain can cite.
+- `truth_claims`: current brain beliefs.
+- `truth_revisions`: claim history.
+- `brain_commits`: "what changed" events.
+- `brain_commit_changes`: structured diff rows for each commit.
 
-### Branching + merge protocol
+## Truth loop
 
-- Each role works on a branch: `p1-infra`, `p2-web`, `p3-ai`, `p4-cli`.
-- Merge order matters (it matches the dependency chain):
-  1. **P1 merges first** — schema, env, `lib/supabase.ts`. Everyone rebases off main.
-  2. **P4 merges `lib/artifacts.ts` next** — unblocks P2's upload form.
-  3. **P3 merges `lib/embeddings.ts` + `lib/anthropic.ts`** — unblocks P2's onboard route.
-  4. **P2 and the rest of P3/P4 merge in parallel** — no shared files left.
-- Rebase before pushing. Never force-push to main.
+```text
+new data arrives
+      |
+      v
+normalize + dedupe
+      |
+      v
+store evidence item
+      |
+      v
+extract candidate claims
+      |
+      v
+compare against truth_claims
+      |
+      +--> supports
+      +--> contradicts
+      +--> refines
+      +--> creates
+      |
+      v
+write brain_commit + changes
+```
 
-### P1 — Infra / DB
+Rules:
 
-Owns scaffolding, Supabase, schema, env, deployment.
+- Dedupe before creating commits.
+- Claims must cite evidence.
+- Contradictions are stored, not hidden.
+- Failed ingestion writes `ingestion_runs.error`.
+- Digest/dashboard should read commits and truth state, not raw artifacts alone.
 
-**Files:** `package.json`, `tsconfig.json`, `bunfig.toml`, `next.config.ts`, `.env.example`, `.gitignore`, `README.md`, `db/schema.sql`, `db/seed.sql`, `db/client.ts`, `lib/supabase.ts`.
+## Team/workstream guidance
 
-**Exports the team relies on:**
-- `lib/supabase.ts` → `supabaseAdmin()` (service-role client) and `supabaseAnon()` (browser client).
-- `db/client.ts` → typed query helpers if needed.
+The previous role-only file ownership was useful for the old scaffold, but the
+Central GBrain reset crosses P1/P3/P4 boundaries. Coordinate by module:
 
-**Hour 0-2 unblocker:** apply `db/schema.sql` to Supabase, populate `.env.example`, export `lib/supabase.ts`. Push to main. Everyone else is blocked until this lands.
+| Lane | Modules | Purpose |
+|------|---------|---------|
+| A | `db/` | Central GBrain schema + typed DB contract |
+| B | `lib/brain.ts`, `lib/truth.ts` | core brain/evidence/commit helpers |
+| C | `scripts/` | source ingestion and morning run |
+| D | `lib/artifacts.ts`, `cli/` | researcher sub-GBrain sharing |
+| E | `app/`, `components/` | product surfaces reading brain state |
 
-### P2 — Web App
+Prefer parallel work only when lanes do not touch the same module.
 
-Owns the Next.js routes, API handlers, and React components.
+## Hackathon failure modes to defend against
 
-**Files:** everything under `app/` and `components/`.
+1. **Truth maintenance becomes abstract.** First pass must ship tables, evidence,
+   claims, commits, and one working loop.
+2. **Duplicate ingestion spams commits.** Use content hashes and unique indexes.
+3. **LLM invents claims.** Claims need evidence citations and confidence.
+4. **Morning job silently fails.** Use `ingestion_runs` status and errors.
+5. **Old surfaces query raw shared artifacts only.** Migrate them to brain state.
+6. **Railway cron overlap/skips hide work.** Make ingestion idempotent and visible.
 
-**Imports from other roles:**
-- `lib/supabase.ts` (P1) — DB access.
-- `lib/artifacts.ts` (P4) — `createArtifact()`, `defaultTierFor(type)` for the upload form checkbox.
-- `lib/embeddings.ts` (P3) — `embed(text)` for the onboarding query.
-- `lib/anthropic.ts` (P3) — `streamChat(messages)` for the streaming Q&A response.
+## Commands
 
-**Can start hour 0:** scaffold UI with mock data. Wire to real libraries as upstream lands.
+```bash
+bun install
+bun run build
+bun run seed-corpus
+bun run brain:ingest
+bun run brain:morning
+```
 
-### P3 — AI Pipeline
+`brain:ingest` and `brain:morning` may be added as part of the Central GBrain
+implementation.
 
-Owns embeddings, LLM judge, prompts, and the paper-pipeline scripts.
+## Deployment
 
-**Files:** `lib/embeddings.ts`, `lib/anthropic.ts`, `prompts/onboarding-qa.md`, `prompts/relationship-judge.md`, `scripts/fetch-arxiv.ts`, `scripts/match-papers.ts`, `scripts/render-digest.ts`.
+Recommended first deployment:
 
-**Exports the team relies on:**
-- `lib/embeddings.ts` → `embed(text: string): Promise<number[]>` (1024-dim Voyage `voyage-3-lite`) and `embedBatch(texts: string[])`.
-- `lib/anthropic.ts` → `streamChat(messages)` for the Q&A and `judgeRelationship(paper, project)` returning `{relationship, rationale, confidence}` JSON.
-- `scripts/render-digest.ts` → `renderDigestForResearcher(id: string): string` (P4's `send-digest.ts` imports this).
+- Supabase for Postgres + pgvector.
+- Railway web service for Next.js.
+- Railway worker service for manual/background ingestion.
+- Railway cron service for morning runs.
 
-**Owns the demo's killer-feature risk:** matcher prompt quality. Hand-test the judge on 5 curated `(paper, project)` pairs before demo.
+Do not split into a complex queue architecture until the single worker loop
+proves the product.
 
-### P4 — CLI + Ingestion + Seeding
+## Explicitly NOT in scope for the first Central GBrain pass
 
-Owns artifact rules, the gbrain CLI extension, seed corpus, and digest delivery.
-
-**Files:** `lib/artifacts.ts`, `lib/email.ts`, `scripts/send-digest.ts`, `scripts/seed-corpus.ts`, `cli/gbrain-research.ts`, `cli/share.ts`.
-
-**Exports the team relies on:**
-- `lib/artifacts.ts` → `ArtifactType`, `Tier`, `defaultTierFor(type)`, `createArtifact(input)`, `sharePromptCopy(type)`. P2's upload form depends on this by hour 4.
-- `lib/email.ts` → `sendDigest(to, markdown)` (Resend or console fallback).
-
-**Demo-critical:** seed ~30-50 shared artifacts before demo day or the onboarding query returns nothing.
-
-### Cross-role contracts (don't break these without telling the importers)
-
-| Export | Owner | Importers |
-|--------|-------|-----------|
-| `lib/supabase.ts: supabaseAdmin/supabaseAnon` | P1 | P2, P3, P4 |
-| `lib/artifacts.ts: createArtifact, defaultTierFor` | P4 | P2 |
-| `lib/embeddings.ts: embed, embedBatch` | P3 | P2 (onboarding), P3 (own scripts) |
-| `lib/anthropic.ts: streamChat, judgeRelationship` | P3 | P2 (onboarding), P3 (match-papers) |
-| `scripts/render-digest.ts: renderDigestForResearcher` | P3 | P4 (send-digest) |
-| `lib/email.ts: sendDigest` | P4 | P4 (send-digest) |
+- multi-lab tenancy
+- Google SSO / real auth
+- local PGLite sync
+- revoke-share state machine
+- broad connector ecosystem
+- full contradiction-resolution UI
+- production eval suite
+- Slack/Notion/Drive/Zotero ingestion
 
 ## Skill routing
 
-When the user's request matches an available gstack skill, invoke it via the Skill tool. When in doubt, invoke the skill.
+When the user's request matches an available gstack skill, invoke it via the
+Skill tool. When in doubt, invoke the skill.
 
 Key routing rules:
-- Product ideas / brainstorming → invoke `/office-hours`
-- Strategy / scope → invoke `/plan-ceo-review`
-- Architecture → invoke `/plan-eng-review`
-- Design system / plan review → invoke `/design-consultation` or `/plan-design-review`
-- Full review pipeline → invoke `/autoplan`
-- Bugs / errors → invoke `/investigate`
-- QA / testing site behavior → invoke `/qa` or `/qa-only`
-- Code review / diff check → invoke `/review`
-- Visual polish → invoke `/design-review`
-- Ship / deploy / PR → invoke `/ship` or `/land-and-deploy`
-- Save progress → invoke `/context-save`
-- Resume context → invoke `/context-restore`
+
+- Product ideas / brainstorming -> invoke `/office-hours`
+- Strategy / scope -> invoke `/plan-ceo-review`
+- Architecture -> invoke `/plan-eng-review`
+- Design system / plan review -> invoke `/design-consultation` or `/plan-design-review`
+- Full review pipeline -> invoke `/autoplan`
+- Bugs / errors -> invoke `/investigate`
+- QA / testing site behavior -> invoke `/qa` or `/qa-only`
+- Code review / diff check -> invoke `/review`
+- Visual polish -> invoke `/design-review`
+- Ship / deploy / PR -> invoke `/ship` or `/land-and-deploy`
+- Save progress -> invoke `/context-save`
+- Resume context -> invoke `/context-restore`
