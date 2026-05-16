@@ -30,7 +30,8 @@ export async function POST(req: Request) {
 
   // Step 2: pgvector top-10 cosine search over shared artifacts
   const supabase = supabaseAdmin();
-  const { data: artifacts, error } = await supabase.rpc("match_artifacts", {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: artifacts, error } = await (supabase as any).rpc("match_artifacts", {
     query_embedding: embedding,
     match_count: 10,
   });
