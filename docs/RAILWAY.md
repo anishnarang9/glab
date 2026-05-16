@@ -32,6 +32,9 @@ OPENCLAW_PENDING_LIMIT=50
 LABBRAIN_ARXIV_QUERY=cat:cs.LG
 LABBRAIN_RSS_FEEDS=
 LABBRAIN_HOG_FEEDS=top,new
+HOG_ACCESS_KEY=
+HOG_SECRET_KEY=
+HOG_BASE_URL=https://developer.thehog.ai
 ```
 
 Also set this on the web service for browser-safe Supabase use:

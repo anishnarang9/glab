@@ -45,6 +45,22 @@ type HogStory = {
   type?: string
 }
 
+type HogScrapeResult = {
+  content?: string
+  html?: string
+  text?: string
+  markdown?: string
+  operationId?: string
+  id?: string
+  result?: {
+    content?: string
+    html?: string
+    text?: string
+    markdown?: string
+  }
+  status?: string
+}
+
 export async function runCentralGBrainIngestion(trigger: IngestionRunTrigger = parseTrigger()): Promise<number> {
   const brain = await ensureDefaultBrain()
   await ensureConfiguredSources(brain)
@@ -291,9 +307,7 @@ async function rssEvidence(config: Json): Promise<EvidenceSeed[]> {
 async function webPageEvidence(config: Json): Promise<EvidenceSeed[]> {
   const cfg = asObject(config)
   const url = requireConfigString(cfg, 'url')
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`Web fetch failed for ${url}: ${response.status} ${response.statusText}`)
-  const html = await response.text()
+  const html = await fetchWebText(url)
   return extractBlocks(html).slice(0, 12).map((content, index) => ({
     sourceKind: 'web_page',
     sourceRef: `${url}#block-${index + 1}`,
@@ -307,6 +321,8 @@ async function hogNewsEvidence(config: Json): Promise<EvidenceSeed[]> {
   const cfg = asObject(config)
   const feed = normalizeHogFeed(typeof cfg.feed === 'string' ? cfg.feed : 'top')
   const limit = clampLimit(typeof cfg.limit === 'number' ? cfg.limit : 30, 1, 100)
+  if (hasHogCredentials()) return hogScrapedNewsEvidence(feed, limit)
+
   const idsResponse = await fetch(`https://hacker-news.firebaseio.com/v0/${feed}stories.json`)
   if (!idsResponse.ok) throw new Error(`HOG Hacker News fetch failed: ${idsResponse.status} ${idsResponse.statusText}`)
 
@@ -327,6 +343,68 @@ async function fetchHogStory(id: number): Promise<HogStory> {
   const response = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
   if (!response.ok) throw new Error(`HOG Hacker News item ${id} fetch failed: ${response.status} ${response.statusText}`)
   return await response.json() as HogStory
+}
+
+async function hogScrapedNewsEvidence(feed: 'top' | 'new' | 'best', limit: number): Promise<EvidenceSeed[]> {
+  const url = `https://news.ycombinator.com/${feed === 'new' ? 'newest' : feed}`
+  const html = await hogScrape(url)
+  const stories = parseHackerNewsHtml(html, limit)
+
+  return stories.map((story) => ({
+    sourceKind: 'hog_news',
+    sourceRef: story.sourceRef,
+    title: story.title,
+    content: [
+      `HOG scraped Hacker News ${feed} story: ${story.title}`,
+      story.url ? `URL: ${story.url}` : null,
+      story.points ? `Points: ${story.points}` : null,
+      story.comments ? `Comments: ${story.comments}` : null,
+    ].filter(Boolean).join('\n'),
+    url: story.url,
+    publishedAt: null,
+  }))
+}
+
+async function fetchWebText(url: string): Promise<string> {
+  if (hasHogCredentials()) return hogScrape(url)
+
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Web fetch failed for ${url}: ${response.status} ${response.statusText}`)
+  return response.text()
+}
+
+async function hogScrape(url: string): Promise<string> {
+  const response = await fetch(`${hogBaseUrl()}/api/v1/platform/scrapers/web/scrape`, {
+    method: 'POST',
+    headers: hogHeaders(),
+    body: JSON.stringify({ url, renderJs: false }),
+  })
+
+  if (!response.ok) throw new Error(`HOG scrape failed for ${url}: ${response.status} ${await response.text()}`)
+  const data = await response.json() as HogScrapeResult
+  const operationId = data.operationId ?? data.id
+  if (operationId) return pollHogOperation(operationId)
+
+  return hogResultText(data)
+}
+
+async function pollHogOperation(id: string, maxWaitMs = 30_000): Promise<string> {
+  const deadline = Date.now() + maxWaitMs
+  while (Date.now() < deadline) {
+    await sleep(2_000)
+    const response = await fetch(`${hogBaseUrl()}/api/operations/${id}`, { headers: hogHeaders() })
+    if (!response.ok) throw new Error(`HOG operation poll failed for ${id}: ${response.status}`)
+
+    const data = await response.json() as HogScrapeResult
+    if (data.status === 'completed') return hogResultText(data.result ?? data)
+    if (data.status === 'failed') throw new Error(`HOG operation failed for ${id}`)
+  }
+
+  throw new Error(`HOG operation timed out for ${id}`)
+}
+
+function hogResultText(data: HogScrapeResult): string {
+  return data.content ?? data.html ?? data.markdown ?? data.text ?? JSON.stringify(data)
 }
 
 async function markSourceChecked(sourceId: string): Promise<void> {
@@ -420,6 +498,58 @@ function normalizeHogFeed(value: string): 'top' | 'new' | 'best' {
   return 'top'
 }
 
+function parseHackerNewsHtml(html: string, limit: number): Array<{
+  sourceRef: string
+  title: string
+  url: string
+  points: string | null
+  comments: string | null
+}> {
+  const rows = [...html.matchAll(/<tr class=['"]athing['"][^>]*id=['"](\d+)['"][\s\S]*?<\/tr>\s*<tr[\s\S]*?<\/tr>/g)]
+  return rows.slice(0, limit).map((match) => {
+    const id = match[1]
+    const row = match[0]
+    const titleMatch = row.match(/<span class=['"]titleline['"][\s\S]*?<a href=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/a>/)
+    const pointsMatch = row.match(/<span class=['"]score['"][^>]*>([^<]+)<\/span>/)
+    const commentsMatch = row.match(/>(\d+)&nbsp;comments<\/a>/)
+    const rawUrl = titleMatch?.[1] ?? `https://news.ycombinator.com/item?id=${id}`
+    const title = titleMatch ? cleanXmlText(titleMatch[2]) : `Hacker News item ${id}`
+
+    return {
+      sourceRef: `hn:${id}`,
+      title,
+      url: absolutizeHackerNewsUrl(rawUrl),
+      points: pointsMatch ? cleanXmlText(pointsMatch[1]) : null,
+      comments: commentsMatch ? commentsMatch[1] : null,
+    }
+  }).filter((story) => story.title.trim().length > 0)
+}
+
+function hasHogCredentials(): boolean {
+  return Boolean(process.env.HOG_ACCESS_KEY && process.env.HOG_SECRET_KEY)
+}
+
+function hogBaseUrl(): string {
+  return process.env.HOG_BASE_URL?.replace(/\/$/, '') || 'https://developer.thehog.ai'
+}
+
+function hogHeaders(): Record<string, string> {
+  if (!process.env.HOG_ACCESS_KEY || !process.env.HOG_SECRET_KEY) {
+    throw new Error('HOG_ACCESS_KEY and HOG_SECRET_KEY are required for HOG scraping')
+  }
+
+  return {
+    'X-Access-Key': process.env.HOG_ACCESS_KEY,
+    'X-Secret-Key': process.env.HOG_SECRET_KEY,
+    'Content-Type': 'application/json',
+  }
+}
+
+function absolutizeHackerNewsUrl(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return `https://news.ycombinator.com/${url.replace(/^\//, '')}`
+}
+
 function clampLimit(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min
   return Math.max(min, Math.min(max, Math.floor(value)))
@@ -440,6 +570,10 @@ function hogStoryContent(story: HogStory): string {
   ].filter(Boolean)
 
   return parts.join('\n')
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function splitEnv(value: string | undefined): string[] {
