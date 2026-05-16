@@ -11,6 +11,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { supabaseAdmin } from '@/lib/supabase'
+import { embed } from '@/lib/embeddings'
 
 const LAB_DOCS = [
   { file: 'lab-overview.md',        type: 'note'    },
@@ -26,6 +27,7 @@ const LAB_EMAIL = 'lab@gtech.demo'
 async function main() {
   const missing = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'].filter(k => !process.env[k])
   if (missing.length) throw new Error(`Missing env vars: ${missing.join(', ')}`)
+  if (!process.env.VOYAGE_API_KEY) throw new Error('Missing env var: VOYAGE_API_KEY')
 
   const db = supabaseAdmin()
 
@@ -46,12 +48,15 @@ async function main() {
     const raw = await readFile(join(DIR, file), 'utf8')
     const title = raw.split('\n')[0].replace(/^#+\s*/, '').trim()
 
+    const embedding = await embed(`${title}\n${raw}`)
+
     const { error } = await db.from('artifacts').insert({
       owner_id: labResearcher.id,
       type,
       tier: 'shared',
       title,
       content: raw,
+      embedding,
     })
 
     if (error) {
