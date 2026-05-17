@@ -14,17 +14,17 @@ import type {
   TruthEvidenceRelationship,
 } from '@/db/client'
 
-type EvidenceObservation = {
+export type EvidenceObservation = {
   brain: Pick<Brain, 'id' | 'name' | 'subject' | 'mission'>
   evidence: Pick<EvidenceItem, 'id' | 'source_kind' | 'source_ref' | 'title' | 'content' | 'url' | 'published_at'>
-  currentClaims: Array<{
+  currentClaims: ReadonlyArray<{
     id: string
     statement: string
     status: string
     confidence: number | null
     updated_at: string
   }>
-  recentCommits: Array<{
+  recentCommits: ReadonlyArray<{
     id: string
     kind: string
     summary: string
@@ -32,7 +32,7 @@ type EvidenceObservation = {
   }>
 }
 
-type OpenClawEvidenceDecision = {
+export type OpenClawEvidenceDecision = {
   decisionType: OpenClawDecisionType
   subject: string
   rationale: string
@@ -190,30 +190,39 @@ async function decideWithOpenClaw(observation: EvidenceObservation): Promise<Ope
   const endpoint = process.env.OPENCLAW_HEAD_GBRAIN_URL?.trim()
   if (!endpoint) return localOpenClawPolicy(observation)
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(process.env.OPENCLAW_HEAD_GBRAIN_TOKEN
-        ? { Authorization: `Bearer ${process.env.OPENCLAW_HEAD_GBRAIN_TOKEN}` }
-        : {}),
-    },
-    body: JSON.stringify({
-      operator: process.env.OPENCLAW_OPERATOR_NAME ?? 'Glab Head GBrain OpenClaw',
-      task: 'decide_evidence_relevance',
-      observation,
-    }),
-  })
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.OPENCLAW_HEAD_GBRAIN_TOKEN
+          ? { Authorization: `Bearer ${process.env.OPENCLAW_HEAD_GBRAIN_TOKEN}` }
+          : {}),
+      },
+      body: JSON.stringify({
+        operator: process.env.OPENCLAW_OPERATOR_NAME ?? 'Glab Head GBrain OpenClaw',
+        task: 'decide_evidence_relevance',
+        observation,
+      }),
+    })
 
-  if (!response.ok) {
-    throw new Error(`OpenClaw decision endpoint failed: ${response.status} ${response.statusText}`)
+    if (!response.ok) {
+      throw new Error(`OpenClaw decision endpoint failed: ${response.status} ${response.statusText}`)
+    }
+
+    const body = await response.json() as unknown
+    return normalizeRemoteDecision(body, observation)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (process.env.OPENCLAW_REMOTE_REQUIRED === 'true') throw error
+    return localOpenClawPolicy(observation, message)
   }
-
-  const body = await response.json() as unknown
-  return normalizeRemoteDecision(body, observation)
 }
 
-function localOpenClawPolicy(observation: EvidenceObservation): OpenClawEvidenceDecision {
+export function localOpenClawPolicy(
+  observation: EvidenceObservation,
+  fallbackReason?: string,
+): OpenClawEvidenceDecision {
   const title = observation.evidence.title?.trim()
   const content = observation.evidence.content.replace(/\s+/g, ' ').trim()
   const subject = title || shorten(content, 140)
@@ -224,7 +233,7 @@ function localOpenClawPolicy(observation: EvidenceObservation): OpenClawEvidence
       subject,
       rationale: 'OpenClaw skipped this item because it is too short to support shared truth.',
       confidence: 0.8,
-      payload: { reason: 'too_short' },
+      payload: localDecisionPayload({ reason: 'too_short' }, fallbackReason),
     }
   }
 
@@ -235,24 +244,33 @@ function localOpenClawPolicy(observation: EvidenceObservation): OpenClawEvidence
     rationale: `OpenClaw accepted this ${observation.evidence.source_kind} item as broadly relevant to ${observation.brain.subject}.`,
     confidence: 0.62,
     relationship,
-    payload: {
+    payload: localDecisionPayload({
       relationship,
       source_kind: observation.evidence.source_kind,
       source_ref: observation.evidence.source_ref,
-      policy: 'local_openclaw_fallback',
-    },
+    }, fallbackReason),
   }
 }
 
-function normalizeRemoteDecision(body: unknown, observation: EvidenceObservation): OpenClawEvidenceDecision {
+export function normalizeRemoteDecision(body: unknown, observation: EvidenceObservation): OpenClawEvidenceDecision {
   const obj = asObject(body)
   const rawDecision = asObject(obj.decision ?? obj)
   const decisionType = normalizeDecisionType(rawDecision.decisionType ?? rawDecision.decision_type)
   const relationship = normalizeRelationship(rawDecision.relationship ?? asObject(rawDecision.payload).relationship)
-  const subject = readString(rawDecision.subject) || observation.evidence.title || shorten(observation.evidence.content, 140)
+  const payload = asObject(rawDecision.payload)
+  const normalizedStatement =
+    readString(rawDecision.normalizedClaim) ||
+    readString(rawDecision.normalized_claim) ||
+    readString(rawDecision.normalizedStatement) ||
+    readString(rawDecision.normalized_statement) ||
+    readString(rawDecision.claim) ||
+    readString(rawDecision.statement) ||
+    readString(payload.normalized_statement) ||
+    readString(payload.normalized_claim) ||
+    null
+  const subject = normalizedStatement || readString(rawDecision.subject) || observation.evidence.title || shorten(observation.evidence.content, 140)
   const rationale = readString(rawDecision.rationale) || 'OpenClaw accepted the evidence for Central GBrain truth maintenance.'
   const confidence = clampConfidence(readNumber(rawDecision.confidence) ?? 0.6)
-  const payload = asObject(rawDecision.payload)
 
   return {
     decisionType,
@@ -260,7 +278,10 @@ function normalizeRemoteDecision(body: unknown, observation: EvidenceObservation
     rationale,
     confidence,
     relationship: relationship ?? relationshipForDecisionType(decisionType),
-    payload,
+    payload: mergePayload(payload, {
+      decision_mode: 'remote_openclaw',
+      normalized_statement: subject,
+    }),
   }
 }
 
@@ -274,6 +295,7 @@ async function recordOpenClawDecision(input: {
   const client = supabaseAdmin()
   const payload = mergePayload(input.proposed.payload, {
     relationship: input.proposed.relationship,
+    normalized_statement: input.proposed.subject,
   })
   const { data, error } = await client
     .from('openclaw_decisions')
@@ -370,6 +392,7 @@ async function applyOpenClawDecision(input: {
     evidence: input.evidence,
     ingestionRunId: input.ingestionRunId,
     decisionId: input.decision.id,
+    statement: input.decision.subject,
     relationship,
     rationale: input.decision.rationale ?? undefined,
     confidence: input.decision.confidence ?? undefined,
@@ -459,6 +482,14 @@ function mergePayload(payload: Json | undefined, extra: Record<string, Json | un
     ...asObject(payload),
     ...extra,
   }
+}
+
+function localDecisionPayload(payload: Record<string, Json | undefined>, fallbackReason?: string): Json {
+  return mergePayload(payload, {
+    decision_mode: 'local_openclaw_fallback',
+    policy: 'local_openclaw_fallback',
+    fallback_reason: fallbackReason,
+  })
 }
 
 function asObject(value: unknown): Record<string, Json | undefined> {

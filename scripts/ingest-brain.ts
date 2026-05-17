@@ -68,6 +68,20 @@ type HogScrapeResult = {
   status?: string
 }
 
+const DEFAULT_CURATED_ARXIV_QUERIES = [
+  'cat:q-bio.NC',
+  'cat:cs.CV AND all:neuroscience',
+  'cat:cs.LG AND all:fMRI',
+]
+
+const DEFAULT_CURATED_WEB_SOURCES = [
+  'https://news.mit.edu/topic/neuroscience',
+  'https://alleninstitute.org/news/',
+  'https://www.simonsfoundation.org/flatiron/center-for-computational-neuroscience/news/',
+]
+
+const DEFAULT_HOG_FEEDS = ['top', 'new', 'best'] as const
+
 export async function runCentralGBrainIngestion(trigger: IngestionRunTrigger = parseTrigger()): Promise<number> {
   const brain = await ensureDefaultBrain()
   await ensureConfiguredSources(brain)
@@ -119,8 +133,7 @@ async function ensureConfiguredSources(brain: Brain): Promise<void> {
     cadence: 'manual',
   })
 
-  const arxivQuery = process.env.LABBRAIN_ARXIV_QUERY
-  if (arxivQuery) {
+  for (const arxivQuery of configuredArxivQueries()) {
     await ensureBrainSource({
       brainId: brain.id,
       kind: 'arxiv_query',
@@ -141,8 +154,17 @@ async function ensureConfiguredSources(brain: Brain): Promise<void> {
     })
   }
 
-  const hogFeeds = splitEnv(process.env.LABBRAIN_HOG_FEEDS)
-  for (const feed of hogFeeds.length ? hogFeeds : ['top']) {
+  for (const url of configuredWebSources()) {
+    await ensureBrainSource({
+      brainId: brain.id,
+      kind: 'web_page',
+      label: url,
+      config: { url },
+      cadence: 'daily',
+    })
+  }
+
+  for (const feed of configuredHogFeeds()) {
     await ensureBrainSource({
       brainId: brain.id,
       kind: 'hog_news',
@@ -151,6 +173,29 @@ async function ensureConfiguredSources(brain: Brain): Promise<void> {
       cadence: 'hourly',
     })
   }
+}
+
+export function configuredArxivQueries(): string[] {
+  const multi = splitEnvList(process.env.LABBRAIN_ARXIV_QUERIES, ';')
+  if (multi.length > 0) return uniqueStrings(multi)
+
+  const legacy = process.env.LABBRAIN_ARXIV_QUERY?.trim()
+  if (legacy) return [legacy]
+
+  return [...DEFAULT_CURATED_ARXIV_QUERIES]
+}
+
+export function configuredWebSources(): string[] {
+  const configured = splitEnvList(process.env.LABBRAIN_WEB_SOURCES, ',')
+  if (configured.length > 0) return uniqueStrings(configured)
+  if (process.env.LABBRAIN_USE_CURATED_WEB_SOURCES === 'false') return []
+  return [...DEFAULT_CURATED_WEB_SOURCES]
+}
+
+export function configuredHogFeeds(): Array<'top' | 'new' | 'best'> {
+  const configured = splitEnvList(process.env.LABBRAIN_HOG_FEEDS, ',')
+  const feeds = configured.length > 0 ? configured : [...DEFAULT_HOG_FEEDS]
+  return uniqueStrings(feeds).map(normalizeHogFeed)
 }
 
 async function enabledSources(brainId: string): Promise<BrainSource[]> {
@@ -656,6 +701,14 @@ function sleep(ms: number): Promise<void> {
 
 function splitEnv(value: string | undefined): string[] {
   return value?.split(',').map((item) => item.trim()).filter(Boolean) ?? []
+}
+
+function splitEnvList(value: string | undefined, separator: ',' | ';'): string[] {
+  return value?.split(separator).map((item) => item.trim()).filter(Boolean) ?? []
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)]
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

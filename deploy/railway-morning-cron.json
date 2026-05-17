@@ -5,8 +5,8 @@
     "buildCommand": "bun run typecheck && bun run verify:shared-artifacts && bun run verify:pipeline"
   },
   "deploy": {
-    "startCommand": "bun run brain:morning",
-    "cronSchedule": "0 13 * * *",
+    "startCommand": "bun run brain:nightly",
+    "cronSchedule": "0 9 * * *",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

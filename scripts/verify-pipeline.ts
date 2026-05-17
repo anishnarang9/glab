@@ -8,8 +8,12 @@ const requiredFiles = [
   'app/api/brain/openclaw/route.ts',
   'lib/postgres-rest.ts',
   'lib/openclaw.ts',
+  'lib/truth.ts',
   'lib/shared-artifact-ingestion.ts',
   'lib/email-ingestion.ts',
+  'scripts/verify-openclaw-truth.ts',
+  'scripts/verify-curated-sources.ts',
+  'scripts/verify-e2e-prod.ts',
   'scripts/verify-shared-artifact-ingestion.ts',
   'scripts/ingest-email.ts',
   'scripts/openclaw-head-gbrain.ts',
@@ -22,7 +26,11 @@ const requiredEnv = [
   'SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
   'LABBRAIN_DEFAULT_BRAIN_NAME',
+  'LABBRAIN_ARXIV_QUERIES',
+  'LABBRAIN_WEB_SOURCES',
+  'LABBRAIN_USE_CURATED_WEB_SOURCES',
   'OPENCLAW_OPERATOR_NAME',
+  'OPENCLAW_REMOTE_REQUIRED',
   'LABBRAIN_WORKER_TOKEN',
   'SUPABASE_SHARED_INGEST_ENABLED',
   'SHARED_ARTIFACT_INGEST_LIMIT',
@@ -43,9 +51,15 @@ const packageScripts = [
   'build',
   'typecheck',
   'verify:shared-artifacts',
+  'verify:openclaw-truth',
+  'verify:curated-sources',
+  'verify:e2e:prod',
   'verify:pipeline',
   'ci',
+  'ci:live',
   'brain:morning',
+  'brain:nightly',
+  'brain:worker',
   'openclaw:worker',
   'openclaw:loop',
   'email:ingest',
@@ -93,6 +107,15 @@ async function assertRailwayConfigs(): Promise<void> {
     assert(config.$schema === 'https://railway.com/railway.schema.json', `${file} missing Railway schema`)
     assert(typeof config.build === 'object' && config.build != null, `${file} missing build block`)
     assert(typeof config.deploy === 'object' && config.deploy != null, `${file} missing deploy block`)
+    if (file.endsWith('railway-morning-cron.json')) {
+      const deploy = config.deploy as Record<string, unknown>
+      assert(deploy.startCommand === 'bun run brain:nightly', `${file} should run brain:nightly`)
+      assert(deploy.cronSchedule === '0 9 * * *', `${file} should run at 09:00 UTC`)
+    }
+    if (file.endsWith('railway-openclaw-worker.json')) {
+      const deploy = config.deploy as Record<string, unknown>
+      assert(deploy.startCommand === 'bun run brain:worker', `${file} should run brain:worker`)
+    }
   }
 }
 
