@@ -99,7 +99,11 @@ export async function runCentralGBrainIngestion(trigger: IngestionRunTrigger = p
 
   let createdEvidence = sharedArtifacts.ingested
   for (const source of sources.filter((source) => source.kind !== 'researcher_shared_artifacts')) {
-    createdEvidence += await ingestSource(brain, source, trigger)
+    try {
+      createdEvidence += await ingestSource(brain, source, trigger)
+    } catch (error) {
+      console.error(`${source.label}: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   console.log(`Central GBrain ingestion complete: ${createdEvidence} new evidence items`)
@@ -566,6 +570,15 @@ function decodeEntities(value: string): string {
 }
 
 function asObject(value: Json): Record<string, Json> {
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value) as Json
+      return asObject(parsed)
+    } catch {
+      return {}
+    }
+  }
+
   return typeof value === 'object' && value != null && !Array.isArray(value) ? value as Record<string, Json> : {}
 }
 
