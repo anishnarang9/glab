@@ -113,7 +113,7 @@ async function assertRailwayConfigs(): Promise<void> {
     if (file.endsWith('railway-morning-cron.json')) {
       const deploy = config.deploy as Record<string, unknown>
       assert(deploy.startCommand === 'bun run brain:nightly', `${file} should run brain:nightly`)
-      assert(deploy.cronSchedule === '0 9 * * *', `${file} should run at 09:00 UTC`)
+      assert(deploy.cronSchedule === '30 0 * * *', `${file} should run at 00:30 UTC / 5:30 PM Pacific during PDT`)
     }
     if (file.endsWith('railway-openclaw-worker.json')) {
       const deploy = config.deploy as Record<string, unknown>

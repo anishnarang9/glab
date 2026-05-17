@@ -14,7 +14,7 @@ Current production service names:
 3. `diplomatic-creation`
    - config file: `deploy/railway-morning-cron.json`
    - command: `bun run brain:nightly`
-   - cron: `0 9 * * *` (09:00 UTC / about 2:00 AM Pacific during PDT)
+   - cron: `30 0 * * *` (00:30 UTC / about 5:30 PM Pacific during PDT)
 
 ## Required Variables
 
