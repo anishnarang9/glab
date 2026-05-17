@@ -9,12 +9,12 @@ Current production service names:
    - health check: `/api/health`
 2. `awake-purpose`
    - config file: `deploy/railway-openclaw-worker.json`
-   - command: `bun run openclaw:loop`
+   - command: `bun run brain:worker`
    - purpose: watches Supabase for shared artifacts from smaller GBrains, turns them into Central GBrain evidence, and continuously applies the head OpenClaw operator
 3. `diplomatic-creation`
    - config file: `deploy/railway-morning-cron.json`
-   - command: `bun run brain:morning`
-   - cron: `0 13 * * *`
+   - command: `bun run brain:nightly`
+   - cron: `0 9 * * *` (09:00 UTC / about 2:00 AM Pacific during PDT)
 
 ## Required Variables
 
@@ -29,12 +29,16 @@ LABBRAIN_DEFAULT_BRAIN_SUBJECT="research lab knowledge"
 LABBRAIN_DEFAULT_BRAIN_MISSION="Maintain evidence-backed shared truth for the lab"
 LABBRAIN_WORKER_TOKEN=
 OPENCLAW_OPERATOR_NAME="Glab Head GBrain OpenClaw"
+OPENCLAW_REMOTE_REQUIRED=false
 OPENCLAW_POLL_INTERVAL_MS=60000
 OPENCLAW_PENDING_LIMIT=50
 SUPABASE_SHARED_INGEST_ENABLED=true
 SHARED_ARTIFACT_INGEST_LIMIT=500
 LABBRAIN_ARXIV_QUERY=cat:cs.LG
+LABBRAIN_ARXIV_QUERIES=
 LABBRAIN_RSS_FEEDS=
+LABBRAIN_WEB_SOURCES=
+LABBRAIN_USE_CURATED_WEB_SOURCES=true
 LABBRAIN_HOG_FEEDS=top,new
 HOG_ACCESS_KEY=
 HOG_SECRET_KEY=
@@ -71,6 +75,9 @@ COMPOSIO_ORG=
 For P4, `awake-purpose` is the Railway OpenClaw worker service. Do not block
 deployment on `OPENCLAW_HEAD_GBRAIN_URL`; that variable only swaps the local
 Railway OpenClaw decision policy for a richer remote decision endpoint later.
+If the remote endpoint is configured but unavailable, the worker records
+`decision_mode='local_openclaw_fallback'` in the decision payload unless
+`OPENCLAW_REMOTE_REQUIRED=true`.
 
 The `awake-purpose` worker is Supabase-first. Smaller researcher GBrains write
 rows directly into `artifacts` with `tier='shared'`; the worker adopts rows whose
@@ -89,13 +96,35 @@ demo specifically needs the mailbox path.
 6. Add the environment variables above.
 7. Run the SQL in `db/schema.sql`, then `db/seed.sql`, against Supabase.
 8. Verify `/api/health` returns `{ "ok": true }`.
-9. Insert a shared artifact directly into Supabase or run `brain:morning`, then confirm rows appear in:
+9. Insert a shared artifact directly into Supabase or run `brain:nightly`, then confirm rows appear in:
    - `artifacts` with `tier='shared'`
    - `ingestion_runs`
    - `evidence_items`
    - `openclaw_instances`
    - `openclaw_decisions`
+   - `truth_claims`
    - `brain_commits`
+
+## Verification
+
+Run the non-live suite before deploying:
+
+```bash
+bun run ci
+```
+
+Run the live production smoke only when you intend to create and clean up a
+temporary marked artifact in Supabase:
+
+```bash
+P4_E2E_PROD=true bun run verify:e2e:prod
+```
+
+To prove the always-on Railway worker is the component ingesting the row, add:
+
+```bash
+P4_E2E_PROD=true P4_E2E_USE_WORKER=true bun run verify:e2e:prod
+```
 
 ## If the GitHub Repo Does Not Show Up
 

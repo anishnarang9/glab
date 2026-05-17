@@ -35,11 +35,12 @@ Central GBrain worker commands are being added under `scripts/`:
 
 ```bash
 bun run brain:ingest     # run the central ingestion/truth loop once
-bun run brain:morning    # morning scheduled run for Railway cron
+bun run brain:nightly    # nightly scheduled run for Railway cron
+bun run brain:worker     # long-running Railway OpenClaw/head GBrain worker
 bun run openclaw:worker  # Railway worker: ingest sources, then apply OpenClaw decisions
 bun run openclaw:pending # apply OpenClaw to pending evidence only
-bun run openclaw:loop    # long-running Railway OpenClaw instance
 bun run ci               # typecheck, static pipeline verification, production build
+bun run verify:e2e:prod  # live marked Supabase smoke; requires P4_E2E_PROD=true
 ```
 
 ## Layout

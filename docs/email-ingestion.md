@@ -114,7 +114,7 @@ bun run email:ingest
 **Production / demo setup, only if explicitly enabling email:**
 ```bash
 # awake-purpose runs this continuously:
-bun run openclaw:loop
+bun run brain:worker
 ```
 
 ---

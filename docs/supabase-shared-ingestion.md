@@ -41,7 +41,7 @@ Rules:
 
 ## Worker Loop
 
-`bun run openclaw:loop` does this every poll:
+`bun run brain:worker` does this every poll:
 
 1. scan shared artifacts visible to the head brain
 2. skip rows already represented by `evidence_items.artifact_id`
@@ -54,3 +54,12 @@ Rules:
 9. apply truth maintenance and write decision/claim commits
 
 Gmail ingestion is optional and disabled unless `EMAIL_INGEST_ENABLED=true`.
+
+OpenClaw decisions write `payload.decision_mode`. Remote decisions use
+`remote_openclaw`; local fallback decisions use `local_openclaw_fallback` and
+include `fallback_reason` when a remote endpoint failed.
+
+The cleanup-safe production smoke inserts a temporary artifact whose title starts
+with `[P4_E2E_SMOKE:<runId>]`, verifies evidence/decision/claim/commit creation,
+and deletes the marked artifact plus linked evidence, decisions, claims, and
+commit rows.

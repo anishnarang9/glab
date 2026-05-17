@@ -205,6 +205,24 @@ function sleep(ms: number): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error))
+  console.error(formatError(error))
   process.exitCode = 1
 })
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object') {
+    const details = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown }
+    const parts = [details.message, details.details, details.hint, details.code]
+      .filter((part): part is string => typeof part === 'string' && part.length > 0)
+    if (parts.length > 0) return parts.join(' | ')
+
+    try {
+      return JSON.stringify(error)
+    } catch {
+      return 'Unknown production smoke error'
+    }
+  }
+
+  return String(error)
+}

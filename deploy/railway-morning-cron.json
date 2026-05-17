@@ -2,7 +2,7 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "RAILPACK",
-    "buildCommand": "bun run typecheck && bun run verify:shared-artifacts && bun run verify:pipeline"
+    "buildCommand": "bun run typecheck && bun run verify:shared-artifacts && bun run verify:openclaw-truth && bun run verify:curated-sources && bun run verify:brain-state && bun run verify:pipeline"
   },
   "deploy": {
     "startCommand": "bun run brain:nightly",
