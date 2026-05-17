@@ -5,12 +5,6 @@ export type DailySourceRefreshDecision = {
   runKey: string
 }
 
-export type DailySourceRefreshRun = {
-  trigger: string
-  status: string
-  started_at: string
-}
-
 export function shouldRunDailySourceRefresh(input: {
   now?: Date
   lastRunKey: string | null
@@ -30,20 +24,6 @@ export function shouldRunDailySourceRefresh(input: {
     runKey,
     shouldRun: reachedTarget && input.lastRunKey !== runKey,
   }
-}
-
-export function dailySourceRefreshRunExists(runs: DailySourceRefreshRun[], runKey: string, now = new Date()): boolean {
-  return runs.some((run) =>
-    run.trigger === 'source_refresh' &&
-    run.status !== 'failed' &&
-    !isStaleRunningRefresh(run, now) &&
-    pacificDateKey(new Date(run.started_at)) === runKey,
-  )
-}
-
-export function pacificDateKey(date: Date, timeZone = PACIFIC_TIME_ZONE): string {
-  const parts = zonedParts(date, timeZone)
-  return `${parts.year}-${parts.month}-${parts.day}`
 }
 
 function zonedParts(date: Date, timeZone: string): {
@@ -79,16 +59,4 @@ function requiredPart(parts: Record<string, string>, key: string): string {
   const value = parts[key]
   if (!value) throw new Error(`Could not resolve ${key} for daily source refresh schedule`)
   return value
-}
-
-function isStaleRunningRefresh(run: DailySourceRefreshRun, now: Date): boolean {
-  if (run.status !== 'running') return false
-  const maxRunningMs = readIntEnv('GBRAIN_SOURCE_REFRESH_MAX_RUNNING_MS', 15 * 60_000, 60_000, 60 * 60_000)
-  return now.getTime() - new Date(run.started_at).getTime() > maxRunningMs
-}
-
-function readIntEnv(name: string, fallback: number, min: number, max: number): number {
-  const raw = Number(process.env[name])
-  if (!Number.isInteger(raw)) return fallback
-  return Math.max(min, Math.min(max, raw))
 }

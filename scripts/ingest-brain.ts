@@ -138,8 +138,7 @@ async function ensureConfiguredSources(brain: Brain): Promise<void> {
     cadence: 'manual',
   })
 
-  const arxivQueries = configuredArxivQueries()
-  for (const arxivQuery of arxivQueries) {
+  for (const arxivQuery of configuredArxivQueries()) {
     await ensureBrainSource({
       brainId: brain.id,
       kind: 'arxiv_query',
@@ -148,7 +147,6 @@ async function ensureConfiguredSources(brain: Brain): Promise<void> {
       cadence: 'daily',
     })
   }
-  await disableUnconfiguredArxivSources(brain.id, arxivQueries)
 
   const rssFeeds = splitEnv(process.env.LABBRAIN_RSS_FEEDS)
   for (const url of rssFeeds) {
@@ -187,34 +185,9 @@ export function configuredArxivQueries(): string[] {
   if (multi.length > 0) return uniqueStrings(multi)
 
   const legacy = process.env.LABBRAIN_ARXIV_QUERY?.trim()
-  if (legacy === 'cat:cs.LG') return [...DEFAULT_CURATED_ARXIV_QUERIES]
   if (legacy) return [legacy]
 
   return [...DEFAULT_CURATED_ARXIV_QUERIES]
-}
-
-async function disableUnconfiguredArxivSources(brainId: string, configuredQueries: string[]): Promise<void> {
-  const configured = new Set(configuredQueries)
-  const client = supabaseAdmin()
-  const { data, error } = await client
-    .from('brain_sources')
-    .select('id, config, enabled')
-    .eq('brain_id', brainId)
-    .eq('kind', 'arxiv_query')
-
-  if (error) throw error
-
-  for (const source of data) {
-    const query = asObject(source.config).query
-    if (typeof query !== 'string' || configured.has(query) || !source.enabled) continue
-
-    const { error: updateError } = await client
-      .from('brain_sources')
-      .update({ enabled: false })
-      .eq('id', source.id)
-
-    if (updateError) throw updateError
-  }
 }
 
 export function configuredWebSources(): string[] {

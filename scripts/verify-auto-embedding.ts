@@ -3,7 +3,6 @@ import {
   embeddingsOrNull,
   embeddingOrNull,
   formatPgVectorLiteral,
-  localLexicalEmbedding,
   normalizeEmbedding,
   type BatchEmbedder,
   type Embedder,
@@ -71,15 +70,5 @@ const evidenceEmbedding = await resolveEvidenceEmbedding({
 assert.deepEqual(evidenceEmbedding, fakeEmbedding)
 assert.equal(formatPgVectorLiteral([0.1, 0.2, 0.3]), '[0.1,0.2,0.3]')
 assert.deepEqual(normalizeEmbedding(formatPgVectorLiteral(fakeEmbedding)), fakeEmbedding)
-
-const fallback = localLexicalEmbedding('visual cortex fallback embedding')
-assert.equal(fallback.length, 1024)
-assert.deepEqual(fallback, localLexicalEmbedding('visual cortex fallback embedding'))
-
-const previousVoyageKey = process.env.VOYAGE_API_KEY
-delete process.env.VOYAGE_API_KEY
-assert.equal((await embeddingOrNull({ content: 'local fallback without voyage key' }))?.length, 1024)
-if (previousVoyageKey === undefined) delete process.env.VOYAGE_API_KEY
-else process.env.VOYAGE_API_KEY = previousVoyageKey
 
 console.log('Auto embedding verification passed')

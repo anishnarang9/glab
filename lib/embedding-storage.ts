@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { embed, embedBatch } from '@/lib/embeddings'
 
 export type Embedder = (text: string) => Promise<number[]>
@@ -16,7 +15,7 @@ export async function embeddingOrNull(input: {
   if (process.env.GBRAIN_AUTO_EMBED_ENABLED === 'false') return null
 
   const embedder = input.embedder ?? (process.env.VOYAGE_API_KEY ? embed : null)
-  if (!embedder) return localEmbeddingOrNull(input.content)
+  if (!embedder) return null
 
   try {
     const embedding = await embedder(input.content)
@@ -24,7 +23,7 @@ export async function embeddingOrNull(input: {
   } catch (error) {
     if (input.strict) throw error
     warnEmbeddingFailure(error)
-    return localEmbeddingOrNull(input.content)
+    return null
   }
 }
 
@@ -39,7 +38,7 @@ export async function embeddingsOrNull(input: {
   if (process.env.GBRAIN_AUTO_EMBED_ENABLED === 'false') return results
 
   const batchEmbedder = input.batchEmbedder ?? (process.env.VOYAGE_API_KEY ? embedBatch : null)
-  if (!batchEmbedder) return fillMissingWithLocalEmbeddings(input.contents, results)
+  if (!batchEmbedder) return results
 
   const missing = input.contents
     .map((content, index) => ({ content, index }))
@@ -58,9 +57,6 @@ export async function embeddingsOrNull(input: {
     } catch (error) {
       if (input.strict) throw error
       warnEmbeddingFailure(error)
-      for (const item of batch) {
-        results[item.index] = localEmbeddingOrNull(item.content)
-      }
     }
   }
 
@@ -97,30 +93,6 @@ export function formatPgVectorLiteral(embedding: number[]): string {
     if (!Number.isFinite(value)) throw new Error('Embedding contains a non-finite number')
     return String(value)
   }).join(',')}]`
-}
-
-export function localLexicalEmbedding(content: string): number[] {
-  const values = Array.from({ length: 1024 }, () => 0)
-  const tokens = content.toLowerCase().match(/[a-z0-9]{2,}/g) ?? []
-
-  for (const token of tokens) {
-    const digest = createHash('sha256').update(token).digest()
-    const index = digest.readUInt16BE(0) % values.length
-    const sign = digest[2] % 2 === 0 ? 1 : -1
-    values[index] += sign
-  }
-
-  const norm = Math.sqrt(values.reduce((sum, value) => sum + value * value, 0)) || 1
-  return values.map((value) => value / norm)
-}
-
-function localEmbeddingOrNull(content: string): number[] | null {
-  if (process.env.GBRAIN_LOCAL_EMBED_FALLBACK_ENABLED === 'false') return null
-  return localLexicalEmbedding(content)
-}
-
-function fillMissingWithLocalEmbeddings(contents: string[], results: Array<number[] | null>): Array<number[] | null> {
-  return results.map((result, index) => result ?? localEmbeddingOrNull(contents[index]))
 }
 
 function chunkEmbeddingInputs<T extends { content: string }>(inputs: T[]): T[][] {

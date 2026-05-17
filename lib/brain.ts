@@ -186,9 +186,7 @@ export async function createEvidenceItem(input: EvidenceInput): Promise<{ eviden
     .maybeSingle()
 
   if (existing.error) throw existing.error
-  if (existing.data) {
-    return { evidence: await ensureEvidenceEmbedding(existing.data), created: false }
-  }
+  if (existing.data) return { evidence: existing.data, created: false }
 
   const embedding = await resolveEvidenceEmbedding({
     content,
@@ -219,46 +217,6 @@ export async function createEvidenceItem(input: EvidenceInput): Promise<{ eviden
   return { evidence: data, created: true }
 }
 
-export async function backfillRecentEvidenceEmbeddings(input: {
-  brainId: string
-  limit?: number
-}): Promise<{ scanned: number; updated: number; skipped: number }> {
-  const client = supabaseAdmin()
-  const { data, error } = await client
-    .from('evidence_items')
-    .select('id, content, embedding')
-    .eq('brain_id', input.brainId)
-    .order('created_at', { ascending: false })
-    .limit(input.limit ?? 100)
-
-  if (error) throw error
-
-  let updated = 0
-  let skipped = 0
-  for (const evidence of data) {
-    const before = evidence.embedding
-    const after = await embeddingOrNull({
-      content: evidence.content,
-      existing: before as StoredEmbedding,
-    })
-
-    if (!after || before) {
-      skipped += 1
-      continue
-    }
-
-    const { error: updateError } = await client
-      .from('evidence_items')
-      .update({ embedding: after })
-      .eq('id', evidence.id)
-
-    if (updateError) throw updateError
-    updated += 1
-  }
-
-  return { scanned: data.length, updated, skipped }
-}
-
 export async function resolveEvidenceEmbedding(input: {
   content: string
   embedding?: StoredEmbedding
@@ -269,26 +227,6 @@ export async function resolveEvidenceEmbedding(input: {
     existing: input.embedding ?? null,
     embedder: input.embedder,
   })
-}
-
-export async function ensureEvidenceEmbedding<T extends { id: string; content: string; embedding: StoredEmbedding }>(evidence: T): Promise<T> {
-  if (evidence.embedding) return evidence
-
-  const embedding = await resolveEvidenceEmbedding({
-    content: evidence.content,
-    embedding: evidence.embedding,
-  })
-  if (!embedding) return evidence
-
-  const { data, error } = await supabaseAdmin()
-    .from('evidence_items')
-    .update({ embedding })
-    .eq('id', evidence.id)
-    .select()
-    .single()
-
-  if (error) throw error
-  return data as unknown as T
 }
 
 export async function createBrainCommit(input: CreateCommitInput): Promise<BrainCommit> {

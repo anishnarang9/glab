@@ -26,10 +26,7 @@ try {
 
   delete process.env.LABBRAIN_ARXIV_QUERIES
   process.env.LABBRAIN_ARXIV_QUERY = 'cat:cs.LG'
-  assert(configuredArxivQueries().some((query) => query.includes('q-bio.NC')), 'legacy broad cs.LG should fall back to curated research queries')
-
-  process.env.LABBRAIN_ARXIV_QUERY = 'cat:stat.ML'
-  assert.deepEqual(configuredArxivQueries(), ['cat:stat.ML'])
+  assert.deepEqual(configuredArxivQueries(), ['cat:cs.LG'])
 
   process.env.LABBRAIN_HOG_FEEDS = 'top,new'
   assert.deepEqual(configuredHogFeeds(), ['top', 'new'])
