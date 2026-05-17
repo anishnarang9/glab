@@ -28,7 +28,6 @@ type UpsertOptions = {
 
 type Filter = {
   column: string
-  operator: 'eq' | 'in' | 'is'
   value: unknown
 }
 
@@ -123,17 +122,7 @@ class PostgresQuery implements PromiseLike<QueryResult<unknown[]>> {
   }
 
   eq(column: string, value: unknown): this {
-    this.filters.push({ column: sanitizeIdentifier(column), operator: 'eq', value })
-    return this
-  }
-
-  in(column: string, values: unknown[]): this {
-    this.filters.push({ column: sanitizeIdentifier(column), operator: 'in', value: values })
-    return this
-  }
-
-  is(column: string, value: boolean | null): this {
-    this.filters.push({ column: sanitizeIdentifier(column), operator: 'is', value })
+    this.filters.push({ column: sanitizeIdentifier(column), value })
     return this
   }
 
@@ -248,37 +237,11 @@ class PostgresQuery implements PromiseLike<QueryResult<unknown[]>> {
 
   private whereClause(parameterOffset = 1): { text: string; values: unknown[] } {
     if (this.filters.length === 0) return { text: '', values: [] }
-
-    const clauses: string[] = []
-    const values: unknown[] = []
-    let parameterIndex = parameterOffset
-
-    for (const filter of this.filters) {
-      if (filter.operator === 'eq') {
-        clauses.push(`"${filter.column}" = $${parameterIndex++}`)
-        values.push(dbValue(filter.column, filter.value))
-        continue
-      }
-
-      if (filter.operator === 'in') {
-        const list = Array.isArray(filter.value) ? filter.value : []
-        if (list.length === 0) {
-          clauses.push('false')
-          continue
-        }
-        clauses.push(`"${filter.column}" = any($${parameterIndex++})`)
-        values.push(list.map((value) => dbValue(filter.column, value)))
-        continue
-      }
-
-      if (filter.value === null) {
-        clauses.push(`"${filter.column}" is null`)
-      } else {
-        clauses.push(`"${filter.column}" is ${filter.value ? 'true' : 'false'}`)
-      }
+    const text = ` where ${this.filters.map((filter, index) => `"${filter.column}" = $${parameterOffset + index}`).join(' and ')}`
+    return {
+      text,
+      values: this.filters.map((filter) => dbValue(filter.column, filter.value)),
     }
-
-    return { text: ` where ${clauses.join(' and ')}`, values }
   }
 
   private orderClause(): string {
