@@ -208,7 +208,7 @@ Recommended first deployment:
 - Supabase for Postgres + pgvector.
 - Railway web service for Next.js.
 - Railway worker service for the OpenClaw head Central GBrain operator.
-- Railway cron service for daily 5:30 PM Pacific runs.
+- OpenClaw Railway worker service for daily 6 PM Pacific research source refreshes.
 
 Use `LABBRAIN_WORKER_TOKEN` for secured web hooks. Use Supabase service-role
 credentials only in the Railway worker/web server environment, never browser

@@ -1,18 +1,32 @@
 // Long-running Railway worker loop for the head Central GBrain OpenClaw operator.
 
+import { fileURLToPath } from 'node:url'
 import { ensureDefaultBrain } from '@/lib/brain'
+import { shouldRunDailySourceRefresh } from '@/lib/daily-source-refresh'
 import { runEmailIngestion } from '@/lib/email-ingestion'
 import { ensureHeadGBrainOpenClaw, runOpenClawOnPendingEvidence } from '@/lib/openclaw'
 import { runSharedArtifactIngestion } from '@/lib/shared-artifact-ingestion'
+import { runCentralGBrainIngestion } from '@/scripts/ingest-brain'
 
 async function main(): Promise<void> {
   const intervalMs = readIntervalMs()
   const limit = readLimit()
+  let lastDailySourceRefreshKey: string | null = null
 
   console.log(`OpenClaw worker loop started; interval=${intervalMs}ms limit=${limit}`)
 
   while (true) {
     try {
+      if (dailySourceRefreshEnabled()) {
+        const dailyRefresh = shouldRunDailySourceRefresh({ lastRunKey: lastDailySourceRefreshKey })
+        if (dailyRefresh.shouldRun) {
+          console.log(`OpenClaw daily research source refresh started; run_key=${dailyRefresh.runKey}`)
+          await runCentralGBrainIngestion('source_refresh')
+          lastDailySourceRefreshKey = dailyRefresh.runKey
+          console.log(`OpenClaw daily research source refresh finished; run_key=${dailyRefresh.runKey}`)
+        }
+      }
+
       const sharedSummary = await runSharedArtifactIngestion({ trigger: 'openclaw_worker' })
       if (sharedSummary.enabled && (sharedSummary.ingested > 0 || sharedSummary.errors.length > 0)) {
         console.log(`Shared artifact ingestion: scanned=${sharedSummary.scanned} pending=${sharedSummary.pending} ingested=${sharedSummary.ingested} skipped=${sharedSummary.skipped}`)
@@ -51,11 +65,17 @@ function readLimit(): number {
   return raw
 }
 
+function dailySourceRefreshEnabled(): boolean {
+  return process.env.OPENCLAW_DAILY_SOURCE_REFRESH_ENABLED !== 'false'
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
-})
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })
+}

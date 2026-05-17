@@ -10,11 +10,11 @@ Current production service names:
 2. `awake-purpose`
    - config file: `deploy/railway-openclaw-worker.json`
    - command: `bun run brain:worker`
-   - purpose: watches Supabase for shared artifacts from smaller GBrains, turns them into Central GBrain evidence, and continuously applies the head OpenClaw operator
+   - purpose: watches Supabase, runs the daily 6 PM Pacific research source refresh, turns new inputs into Central GBrain evidence, and continuously applies the head OpenClaw operator
 3. `diplomatic-creation`
    - config file: `deploy/railway-morning-cron.json`
    - command: `bun run brain:daily`
-   - cron: `30 0 * * *` (00:30 UTC / 5:30 PM Pacific during PDT)
+   - cron: `0 1 * * *` (01:00 UTC / 6:00 PM Pacific during PDT)
 
 ## Required Variables
 
@@ -33,6 +33,7 @@ OPENCLAW_OPERATOR_NAME="Glab Head GBrain OpenClaw"
 OPENCLAW_REMOTE_REQUIRED=false
 OPENCLAW_POLL_INTERVAL_MS=60000
 OPENCLAW_PENDING_LIMIT=50
+OPENCLAW_DAILY_SOURCE_REFRESH_ENABLED=true
 SUPABASE_SHARED_INGEST_ENABLED=true
 SHARED_ARTIFACT_INGEST_LIMIT=500
 LABBRAIN_ARXIV_QUERY=
@@ -49,7 +50,7 @@ HOG_BASE_URL=https://developer.thehog.ai
 
 For the current P4 deploy, `DATABASE_URL` should be the Supabase pooler
 Postgres URI. The server code uses it before Supabase REST, so the web service,
-morning cron, and OpenClaw worker still run if the Supabase REST API keys are
+daily cron, and OpenClaw worker still run if the Supabase REST API keys are
 not valid.
 
 Also set this on the web service for browser-safe Supabase use:
@@ -81,8 +82,11 @@ If the remote endpoint is configured but unavailable, the worker records
 `decision_mode='local_openclaw_fallback'` in the decision payload unless
 `OPENCLAW_REMOTE_REQUIRED=true`.
 
-The `awake-purpose` worker is Supabase-first. Smaller researcher GBrains write
-rows directly into `artifacts` with `tier='shared'`; the worker adopts rows whose
+The `awake-purpose` worker is Supabase-first and owns the live OpenClaw loop.
+At or after 6 PM Pacific, it runs the research source refresh once for that
+Pacific day, pulling configured arXiv/web/HOG sources, embedding new evidence,
+and then applying OpenClaw decisions. Smaller researcher GBrains write rows
+directly into `artifacts` with `tier='shared'`; the worker adopts rows whose
 `brain_id` is either null or the head brain id, creates `evidence_items`, runs
 OpenClaw, writes `truth_claims`/`truth_revisions` as needed, and records
 `brain_commits`. Gmail ingestion is optional and should stay disabled unless the
