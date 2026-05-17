@@ -28,6 +28,7 @@ type UpsertOptions = {
 
 type Filter = {
   column: string
+  operator: 'eq' | 'is' | 'in'
   value: unknown
 }
 
@@ -122,7 +123,17 @@ class PostgresQuery implements PromiseLike<QueryResult<unknown[]>> {
   }
 
   eq(column: string, value: unknown): this {
-    this.filters.push({ column: sanitizeIdentifier(column), value })
+    this.filters.push({ column: sanitizeIdentifier(column), operator: 'eq', value })
+    return this
+  }
+
+  is(column: string, value: boolean | null): this {
+    this.filters.push({ column: sanitizeIdentifier(column), operator: 'is', value })
+    return this
+  }
+
+  in(column: string, values: unknown[]): this {
+    this.filters.push({ column: sanitizeIdentifier(column), operator: 'in', value: values })
     return this
   }
 
@@ -237,10 +248,40 @@ class PostgresQuery implements PromiseLike<QueryResult<unknown[]>> {
 
   private whereClause(parameterOffset = 1): { text: string; values: unknown[] } {
     if (this.filters.length === 0) return { text: '', values: [] }
-    const text = ` where ${this.filters.map((filter, index) => `"${filter.column}" = $${parameterOffset + index}`).join(' and ')}`
+
+    const clauses: string[] = []
+    const values: unknown[] = []
+    let nextParameter = parameterOffset
+
+    for (const filter of this.filters) {
+      if (filter.operator === 'eq') {
+        clauses.push(`"${filter.column}" = $${nextParameter++}`)
+        values.push(dbValue(filter.column, filter.value))
+        continue
+      }
+
+      if (filter.operator === 'is') {
+        if (filter.value === null) clauses.push(`"${filter.column}" is null`)
+        else if (filter.value === true) clauses.push(`"${filter.column}" is true`)
+        else if (filter.value === false) clauses.push(`"${filter.column}" is false`)
+        else throw new Error('Postgres adapter .is() only supports null and booleans')
+        continue
+      }
+
+      const list = Array.isArray(filter.value) ? filter.value : []
+      if (list.length === 0) {
+        clauses.push('false')
+        continue
+      }
+
+      const placeholders = list.map(() => `$${nextParameter++}`).join(', ')
+      clauses.push(`"${filter.column}" in (${placeholders})`)
+      values.push(...list.map((value) => dbValue(filter.column, value)))
+    }
+
     return {
-      text,
-      values: this.filters.map((filter) => dbValue(filter.column, filter.value)),
+      text: ` where ${clauses.join(' and ')}`,
+      values,
     }
   }
 
