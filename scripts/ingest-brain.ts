@@ -10,7 +10,7 @@ import {
   startIngestionRun,
 } from '@/lib/brain'
 import { supabaseAdmin } from '@/lib/supabase'
-import { embeddingOrNull } from '@/lib/embedding-storage'
+import { embeddingsOrNull } from '@/lib/embedding-storage'
 import { runOpenClawOnEvidence } from '@/lib/openclaw'
 import { runSharedArtifactIngestion } from '@/lib/shared-artifact-ingestion'
 import type { Artifact, Brain, BrainSource, IngestionRunTrigger, Json, Paper } from '@/db/client'
@@ -335,8 +335,12 @@ async function arxivEvidence(config: Json): Promise<EvidenceSeed[]> {
 async function upsertPapers(entries: ArxivEntry[]): Promise<Paper[]> {
   const client = supabaseAdmin()
   const papers: Paper[] = []
-  for (const entry of entries) {
-    const embedding = await embeddingOrNull({ content: `${entry.title}\n${entry.abstract}` })
+  const embeddings = await embeddingsOrNull({
+    contents: entries.map((entry) => `${entry.title}\n${entry.abstract}`),
+  })
+
+  for (const [index, entry] of entries.entries()) {
+    const embedding = embeddings[index]
     const row = {
       arxiv_id: entry.arxivId,
       title: entry.title,

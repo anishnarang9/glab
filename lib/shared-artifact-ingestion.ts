@@ -9,7 +9,7 @@ import {
   hashText,
   startIngestionRun,
 } from '@/lib/brain'
-import { embeddingOrNull } from '@/lib/embedding-storage'
+import { embeddingsOrNull, normalizeEmbedding } from '@/lib/embedding-storage'
 import { runOpenClawOnEvidence } from '@/lib/openclaw'
 import { supabaseAdmin } from '@/lib/supabase'
 import type { Artifact, Brain, BrainSource, EvidenceItem, IngestionRunTrigger } from '@/db/client'
@@ -71,6 +71,14 @@ export async function runSharedArtifactIngestion(input: {
 
   if (pendingArtifacts.length === 0) return summary
 
+  const resolvedEmbeddings = await embeddingsOrNull({
+    contents: pendingArtifacts.map((artifact) => artifact.content),
+    existing: pendingArtifacts.map((artifact) => artifact.embedding),
+  })
+  const embeddingByArtifactId = new Map(
+    pendingArtifacts.map((artifact, index) => [artifact.id, resolvedEmbeddings[index]]),
+  )
+
   const run = await startIngestionRun({
     brainId: brain.id,
     sourceId: source.id,
@@ -80,7 +88,7 @@ export async function runSharedArtifactIngestion(input: {
   for (const artifact of pendingArtifacts) {
     try {
       const adopted = await adoptArtifactForBrain(artifact, brain.id)
-      const embedded = await ensureArtifactEmbedding(adopted)
+      const embedded = await ensureArtifactEmbedding(adopted, embeddingByArtifactId.get(artifact.id) ?? null)
       const { evidence, created } = await createEvidenceItem({
         brainId: brain.id,
         sourceId: source.id,
@@ -115,23 +123,21 @@ export async function runSharedArtifactIngestion(input: {
   return summary
 }
 
-async function ensureArtifactEmbedding(artifact: Artifact): Promise<Artifact> {
-  const embedding = await embeddingOrNull({
-    content: artifact.content,
-    existing: artifact.embedding,
-  })
-  if (!embedding || artifact.embedding) return artifact
+async function ensureArtifactEmbedding(artifact: Artifact, resolvedEmbedding: number[] | null): Promise<Artifact> {
+  const existing = normalizeEmbedding(artifact.embedding)
+  if (existing) return { ...artifact, embedding: existing }
+  if (!resolvedEmbedding) return artifact
 
   const client = supabaseAdmin()
   const { data, error } = await client
     .from('artifacts')
-    .update({ embedding })
+    .update({ embedding: resolvedEmbedding })
     .eq('id', artifact.id)
     .select()
     .single()
 
   if (error) throw error
-  return data
+  return { ...data, embedding: resolvedEmbedding }
 }
 
 async function loadVisibleSharedArtifacts(brainId: string, limit: number): Promise<Artifact[]> {
