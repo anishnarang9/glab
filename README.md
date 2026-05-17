@@ -2,7 +2,9 @@
 
 **The shared brain for your research lab.**
 
-Every researcher has their own notes, papers, and findings scattered across their laptop. Cortex reads each researcher's personal knowledge base, filters out the noise, and pulls only the lab-relevant work into one shared brain — so the whole team can search it, new hires can onboard instantly, and no one loses a week to something a teammate already knew.
+Built at the YC GBrain × GStack Hackathon.
+
+Every researcher has their own notes, papers, and findings scattered across their laptop. GTeam reads each researcher's personal GBrain, filters out the noise using Zero Entropy, and pulls only the lab-relevant work into one shared brain — so the whole team can search it, new hires can onboard instantly, and no one loses a week to something a teammate already knew.
 
 ---
 
@@ -10,7 +12,7 @@ Every researcher has their own notes, papers, and findings scattered across thei
 
 1. **Personal GBrains** — each researcher has an AI (powered by [GBrain](https://github.com/gstack-ai/gstack)) that captures everything they do: notes, papers, experiments, findings, hypotheses.
 
-2. **Selective pull** — Cortex reads each researcher's personal files, scores them for lab relevance, and promotes only the work-related ones into a central shared database. Your grocery list stays private. Your fMRI findings go to the lab.
+2. **Selective pull** — GTeam reads each researcher's personal files, scores them for lab relevance using Zero Entropy, and promotes only the work-related ones into a central shared database. Your grocery list stays private. Your fMRI findings go to the lab.
 
 3. **Paper agents** — nightly agents scrape leading research labs and match new papers to each researcher's active projects using semantic embeddings + an LLM judge.
 
@@ -35,6 +37,7 @@ Every researcher has their own notes, papers, and findings scattered across thei
 | Framework | Next.js 16 + TypeScript + Bun |
 | Database | Supabase (Postgres + pgvector) |
 | Embeddings | Voyage AI `voyage-3-lite` (1024 dim) |
+| Relevance filtering | Zero Entropy (`zerank-2` reranking) |
 | LLM | Anthropic Claude (onboarding Q&A + paper–project matching) |
 | Personal GBrain | [GBrain](https://github.com/gstack-ai/gstack) via OpenClaw |
 | Paper scraping | The Hog web scraper API |
@@ -63,6 +66,7 @@ SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 ANTHROPIC_API_KEY
 VOYAGE_API_KEY
+ZERO_ENTROPY_API_KEY
 HOG_ACCESS_KEY
 HOG_SECRET_KEY
 RESEND_API_KEY          # optional — falls back to console
@@ -100,7 +104,7 @@ docs/         feature specs and migration notes
 
 ## Team
 
-Built at [hackathon] by a 4-person team in 24 hours.
+Built at the YC GBrain × GStack Hackathon by a 4-person team in 24 hours.
 
 - **P1** — Infra, DB schema, Supabase, paper scraping
 - **P2** — Web app (Next.js routes, React components)

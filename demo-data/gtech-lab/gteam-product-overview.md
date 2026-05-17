@@ -2,7 +2,7 @@
 
 ## What is GTeam?
 
-GTeam is the shared brain for GTech Neuroscience Lab. It connects every researcher's personal knowledge base into one searchable, always-current lab brain — so the whole team can find anything, new hires can onboard in minutes, and no one loses a week to something a teammate already figured out.
+GTeam is the shared brain for GTech Neuroscience Lab, built at the YC GBrain × GStack Hackathon. It connects every researcher's personal GBrain into one searchable, always-current lab brain — filtering signal from noise using Zero Entropy — so the whole team can find anything, new hires can onboard in minutes, and no one loses a week to something a teammate already figured out.
 
 ## The Problem We Solve
 
@@ -16,7 +16,7 @@ GTeam fixes this.
 Every researcher in the lab has a personal GBrain: an AI assistant (powered by the GBrain/OpenClaw stack) that follows them as they work and captures everything they do — notes from experiments, papers they read, hypotheses they form, findings they record — all as markdown files stored locally.
 
 ### Step 2 — Selective Pull
-GTeam reads each researcher's personal GBrain and uses semantic AI to filter out the noise. Personal files (grocery lists, travel plans, random notes) stay private. Lab-relevant work — experiment logs, findings, project notes, paper references — gets promoted into the central shared database. Researchers can also manually tag files as shared.
+GTeam reads each researcher's personal GBrain and uses Zero Entropy to filter out the noise. Personal files (grocery lists, travel plans, random notes) stay private. Lab-relevant work — experiment logs, findings, project notes, paper references — gets promoted into the central shared database. Researchers can also manually tag files as shared.
 
 ### Step 3 — Paper Agents
 Every night, GTeam's agents scan the publication pages of leading neuroscience labs (Kanwisher, DiCarlo, Churchland, Seung, Shenoy, Brunel, and others) for new papers. Each paper is matched to the relevant researcher's active projects using vector similarity and an LLM judge that labels the relationship: validates, suggests_change, extends, scoops, or orthogonal.
@@ -44,7 +44,7 @@ The result is a single, searchable, always-updated knowledge base for the lab. I
 
 ## Tech Stack
 
-GTeam is built on TypeScript, Bun, Next.js, and Supabase with pgvector. Embeddings use Voyage AI (voyage-3-lite, 1024 dimensions). The LLM layer runs on Anthropic Claude for onboarding Q&A and paper-to-project relationship judgment. Paper scraping uses The Hog web scraper API. Email digests are delivered via Resend.
+GTeam is built on TypeScript, Bun, Next.js, and Supabase with pgvector. Embeddings use Voyage AI (voyage-3-lite, 1024 dimensions). Relevance filtering uses Zero Entropy (zerank-2 reranking). The LLM layer runs on Anthropic Claude for onboarding Q&A and paper-to-project relationship judgment. Paper scraping uses The Hog web scraper API. Email digests are delivered via Resend. Built at the YC GBrain × GStack Hackathon.
 
 ## Current Status
 
