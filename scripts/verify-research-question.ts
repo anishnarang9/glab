@@ -8,7 +8,7 @@ assert.equal(
     title: 'Foundation model of neural activity predicts fMRI responses',
     content: 'unused',
   }),
-  "How does Foundation model of neural activity predicts fMRI responses change or challenge the lab's current research direction?",
+  "Could Foundation model of neural activity predicts fMRI responses inform the lab's neural decoding, fMRI, or visual cortex work, or should OpenClaw treat it as orthogonal?",
 )
 
 assert.equal(

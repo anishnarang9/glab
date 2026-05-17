@@ -16,7 +16,7 @@ export function buildResearchQuestion(evidence: Pick<ResearchQuestionEvidence, '
   const subject = cleanSubject(evidence.title) || cleanSubject(evidence.content) || 'this new research item'
 
   if (evidence.source_kind === 'arxiv_query') {
-    return `How does ${subject} change or challenge the lab's current research direction?`
+    return `Could ${subject} inform the lab's neural decoding, fMRI, or visual cortex work, or should OpenClaw treat it as orthogonal?`
   }
 
   if (evidence.source_kind === 'hog_news') {
@@ -36,8 +36,8 @@ export function pickBestResearchEvidence(evidence: ResearchQuestionEvidence[]): 
 
 function evidenceScore(evidence: ResearchQuestionEvidence): number {
   const sourceScore =
+    evidence.source_kind === 'web_page' ? 350 :
     evidence.source_kind === 'arxiv_query' ? 300 :
-    evidence.source_kind === 'web_page' ? 200 :
     100
   const embeddingScore = evidenceHasEmbedding(evidence) ? 50 : 0
   return sourceScore + embeddingScore + labRelevanceScore(evidence) + Date.parse(evidence.created_at) / 1_000_000_000_000
@@ -53,15 +53,16 @@ function labRelevanceScore(evidence: Pick<ResearchQuestionEvidence, 'title' | 'c
     'fmri',
     'cortex',
     'cortical',
-    'visual',
-    'vision',
-    'decoding',
     'connectome',
     'connectomics',
     'bci',
     'motor',
     'population dynamics',
     'computational neuroscience',
+    'visual cortex',
+    'neural decoding',
+    'brain decoding',
+    'fmri decoding',
   ].filter((term) => text.includes(term)).length
 
   return Math.min(matches, 4) * 150
