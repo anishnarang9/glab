@@ -1,5 +1,5 @@
 import { ensureDefaultBrain } from '@/lib/brain'
-import { buildResearchQuestion, evidenceHasEmbedding, type ResearchQuestionEvidence } from '@/lib/research-question'
+import { buildResearchQuestion, evidenceHasEmbedding, pickBestResearchEvidence, type ResearchQuestionEvidence } from '@/lib/research-question'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -15,12 +15,11 @@ export async function GET() {
       .eq('brain_id', brain.id)
       .in('source_kind', RESEARCH_SOURCE_KINDS)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .limit(50)
 
     if (error) throw error
 
-    const evidence = data as ResearchQuestionEvidence | null
+    const evidence = pickBestResearchEvidence(data as ResearchQuestionEvidence[])
     if (!evidence) {
       return Response.json({
         ok: false,
@@ -43,6 +42,7 @@ export async function GET() {
         created_at: evidence.created_at,
         embedding_present: evidenceHasEmbedding(evidence),
       },
+      candidates_considered: data.length,
     })
   } catch (error) {
     return Response.json({

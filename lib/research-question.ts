@@ -28,6 +28,19 @@ export function evidenceHasEmbedding(evidence: Pick<ResearchQuestionEvidence, 'e
   return evidence.embedding != null
 }
 
+export function pickBestResearchEvidence(evidence: ResearchQuestionEvidence[]): ResearchQuestionEvidence | null {
+  return [...evidence].sort((left, right) => evidenceScore(right) - evidenceScore(left))[0] ?? null
+}
+
+function evidenceScore(evidence: ResearchQuestionEvidence): number {
+  const sourceScore =
+    evidence.source_kind === 'arxiv_query' ? 300 :
+    evidence.source_kind === 'web_page' ? 200 :
+    100
+  const embeddingScore = evidenceHasEmbedding(evidence) ? 50 : 0
+  return sourceScore + embeddingScore + Date.parse(evidence.created_at) / 1_000_000_000_000
+}
+
 function cleanSubject(value: string | null): string {
   if (!value) return ''
   return value

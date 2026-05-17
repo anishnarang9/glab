@@ -59,6 +59,7 @@ assert.equal(
 const loop = await readFile('scripts/openclaw-loop.ts', 'utf8')
 assert(loop.includes('shouldRunDailySourceRefresh'), 'OpenClaw worker loop must own the daily refresh schedule')
 assert(loop.includes('dailySourceRefreshRunExists'), 'OpenClaw worker loop must avoid duplicate daily refreshes after restarts')
+assert(loop.includes('backfillRecentEvidenceEmbeddings'), 'OpenClaw worker loop must backfill missing evidence embeddings')
 assert(loop.includes("runCentralGBrainIngestion('source_refresh')"), 'OpenClaw worker loop must run the research source refresh')
 
 console.log('OpenClaw scheduler verification passed')

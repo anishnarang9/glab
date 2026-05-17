@@ -1,7 +1,7 @@
 // Long-running Railway worker loop for the head Central GBrain OpenClaw operator.
 
 import { fileURLToPath } from 'node:url'
-import { ensureDefaultBrain } from '@/lib/brain'
+import { backfillRecentEvidenceEmbeddings, ensureDefaultBrain } from '@/lib/brain'
 import { dailySourceRefreshRunExists, shouldRunDailySourceRefresh, type DailySourceRefreshRun } from '@/lib/daily-source-refresh'
 import { runEmailIngestion } from '@/lib/email-ingestion'
 import { ensureHeadGBrainOpenClaw, runOpenClawOnPendingEvidence } from '@/lib/openclaw'
@@ -45,6 +45,14 @@ async function main(): Promise<void> {
         for (const message of emailSummary.errors) console.error(`Email ingestion error: ${message}`)
       }
 
+      const backfill = await backfillRecentEvidenceEmbeddings({
+        brainId: brain.id,
+        limit: readEmbeddingBackfillLimit(),
+      })
+      if (backfill.updated > 0) {
+        console.log(`Evidence embedding backfill: scanned=${backfill.scanned} updated=${backfill.updated} skipped=${backfill.skipped}`)
+      }
+
       const operator = await ensureHeadGBrainOpenClaw(brain.id)
       const processed = await runOpenClawOnPendingEvidence({ brain, limit })
       if (processed > 0) {
@@ -72,6 +80,12 @@ function readLimit(): number {
 
 function dailySourceRefreshEnabled(): boolean {
   return process.env.OPENCLAW_DAILY_SOURCE_REFRESH_ENABLED !== 'false'
+}
+
+function readEmbeddingBackfillLimit(): number {
+  const raw = Number(process.env.GBRAIN_EVIDENCE_EMBED_BACKFILL_LIMIT ?? 100)
+  if (!Number.isInteger(raw) || raw < 0 || raw > 1000) return 100
+  return raw
 }
 
 async function loadRecentSourceRefreshRuns(brainId: string): Promise<DailySourceRefreshRun[]> {
