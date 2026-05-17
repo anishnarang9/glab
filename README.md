@@ -77,7 +77,7 @@ RESEND_API_KEY          # optional — falls back to console
 ## Scripts
 
 ```bash
-bun run brain:daily     # OpenClaw-run 6 PM Pacific source refresh + embeddings
+bun run brain:daily     # 5:30 PM Pacific Central GBrain source refresh + embeddings
 bun run fetch-arxiv     # scrape leading lab publication pages → upsert papers
 bun run match-papers    # match papers to researcher projects via LLM judge
 bun run render-digest   # render per-researcher paper digest as markdown

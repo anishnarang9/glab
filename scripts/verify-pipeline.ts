@@ -8,7 +8,6 @@ const requiredFiles = [
   'app/api/brain/openclaw/route.ts',
   'lib/postgres-rest.ts',
   'lib/brain-state.ts',
-  'lib/daily-source-refresh.ts',
   'lib/embedding-storage.ts',
   'lib/openclaw.ts',
   'lib/truth.ts',
@@ -18,7 +17,6 @@ const requiredFiles = [
   'scripts/verify-curated-sources.ts',
   'scripts/verify-brain-state.ts',
   'scripts/verify-auto-embedding.ts',
-  'scripts/verify-openclaw-scheduler.ts',
   'scripts/verify-e2e-prod.ts',
   'scripts/verify-shared-artifact-ingestion.ts',
   'scripts/ingest-email.ts',
@@ -38,7 +36,6 @@ const requiredEnv = [
   'LABBRAIN_USE_CURATED_WEB_SOURCES',
   'OPENCLAW_OPERATOR_NAME',
   'OPENCLAW_REMOTE_REQUIRED',
-  'OPENCLAW_DAILY_SOURCE_REFRESH_ENABLED',
   'LABBRAIN_WORKER_TOKEN',
   'SUPABASE_SHARED_INGEST_ENABLED',
   'SHARED_ARTIFACT_INGEST_LIMIT',
@@ -64,7 +61,6 @@ const packageScripts = [
   'verify:curated-sources',
   'verify:brain-state',
   'verify:auto-embedding',
-  'verify:openclaw-scheduler',
   'verify:e2e:prod',
   'verify:pipeline',
   'ci',
@@ -123,7 +119,7 @@ async function assertRailwayConfigs(): Promise<void> {
     if (file.endsWith('railway-morning-cron.json')) {
       const deploy = config.deploy as Record<string, unknown>
       assert(deploy.startCommand === 'bun run brain:daily', `${file} should run brain:daily`)
-      assert(deploy.cronSchedule === '0 1 * * *', `${file} should run at 01:00 UTC / 6:00 PM Pacific during PDT`)
+      assert(deploy.cronSchedule === '30 0 * * *', `${file} should run at 00:30 UTC / 5:30 PM Pacific during PDT`)
     }
     if (file.endsWith('railway-openclaw-worker.json')) {
       const deploy = config.deploy as Record<string, unknown>

@@ -1,7 +1,7 @@
 // Central GBrain core helpers: brain identity, sources, ingestion runs, evidence, commits.
 
 import { createHash } from 'node:crypto'
-import { embeddingOrNull, type Embedder, type StoredEmbedding } from '@/lib/embedding-storage'
+import { embeddingOrNull, type Embedder } from '@/lib/embedding-storage'
 import { supabaseAdmin } from '@/lib/supabase'
 import type {
   Brain,
@@ -52,7 +52,7 @@ type EvidenceInput = {
   content: string
   url?: string | null
   publishedAt?: string | null
-  embedding?: StoredEmbedding
+  embedding?: number[] | null
 }
 
 type CommitChangeInput = {
@@ -219,7 +219,7 @@ export async function createEvidenceItem(input: EvidenceInput): Promise<{ eviden
 
 export async function resolveEvidenceEmbedding(input: {
   content: string
-  embedding?: StoredEmbedding
+  embedding?: number[] | null
   embedder?: Embedder
 }): Promise<number[] | null> {
   return embeddingOrNull({
