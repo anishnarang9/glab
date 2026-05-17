@@ -2,10 +2,11 @@
 
 import { fileURLToPath } from 'node:url'
 import { ensureDefaultBrain } from '@/lib/brain'
-import { shouldRunDailySourceRefresh } from '@/lib/daily-source-refresh'
+import { dailySourceRefreshRunExists, shouldRunDailySourceRefresh, type DailySourceRefreshRun } from '@/lib/daily-source-refresh'
 import { runEmailIngestion } from '@/lib/email-ingestion'
 import { ensureHeadGBrainOpenClaw, runOpenClawOnPendingEvidence } from '@/lib/openclaw'
 import { runSharedArtifactIngestion } from '@/lib/shared-artifact-ingestion'
+import { supabaseAdmin } from '@/lib/supabase'
 import { runCentralGBrainIngestion } from '@/scripts/ingest-brain'
 
 async function main(): Promise<void> {
@@ -17,9 +18,14 @@ async function main(): Promise<void> {
 
   while (true) {
     try {
+      const brain = await ensureDefaultBrain()
+
       if (dailySourceRefreshEnabled()) {
         const dailyRefresh = shouldRunDailySourceRefresh({ lastRunKey: lastDailySourceRefreshKey })
-        if (dailyRefresh.shouldRun) {
+        if (
+          dailyRefresh.shouldRun &&
+          !dailySourceRefreshRunExists(await loadRecentSourceRefreshRuns(brain.id), dailyRefresh.runKey)
+        ) {
           console.log(`OpenClaw daily research source refresh started; run_key=${dailyRefresh.runKey}`)
           await runCentralGBrainIngestion('source_refresh')
           lastDailySourceRefreshKey = dailyRefresh.runKey
@@ -39,7 +45,6 @@ async function main(): Promise<void> {
         for (const message of emailSummary.errors) console.error(`Email ingestion error: ${message}`)
       }
 
-      const brain = await ensureDefaultBrain()
       const operator = await ensureHeadGBrainOpenClaw(brain.id)
       const processed = await runOpenClawOnPendingEvidence({ brain, limit })
       if (processed > 0) {
@@ -67,6 +72,19 @@ function readLimit(): number {
 
 function dailySourceRefreshEnabled(): boolean {
   return process.env.OPENCLAW_DAILY_SOURCE_REFRESH_ENABLED !== 'false'
+}
+
+async function loadRecentSourceRefreshRuns(brainId: string): Promise<DailySourceRefreshRun[]> {
+  const { data, error } = await supabaseAdmin()
+    .from('ingestion_runs')
+    .select('trigger, status, started_at')
+    .eq('brain_id', brainId)
+    .eq('trigger', 'source_refresh')
+    .order('started_at', { ascending: false })
+    .limit(50)
+
+  if (error) throw error
+  return data
 }
 
 function sleep(ms: number): Promise<void> {

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { strict as assert } from 'node:assert'
-import { shouldRunDailySourceRefresh } from '@/lib/daily-source-refresh'
+import { dailySourceRefreshRunExists, shouldRunDailySourceRefresh } from '@/lib/daily-source-refresh'
 
 assert.deepEqual(
   shouldRunDailySourceRefresh({
@@ -34,8 +34,31 @@ assert.deepEqual(
   { shouldRun: true, runKey: '2026-12-15' },
 )
 
+assert.equal(
+  dailySourceRefreshRunExists([
+    {
+      trigger: 'source_refresh',
+      status: 'succeeded',
+      started_at: '2026-05-17T01:03:00.000Z',
+    },
+  ], '2026-05-16'),
+  true,
+)
+
+assert.equal(
+  dailySourceRefreshRunExists([
+    {
+      trigger: 'source_refresh',
+      status: 'failed',
+      started_at: '2026-05-17T01:03:00.000Z',
+    },
+  ], '2026-05-16'),
+  false,
+)
+
 const loop = await readFile('scripts/openclaw-loop.ts', 'utf8')
 assert(loop.includes('shouldRunDailySourceRefresh'), 'OpenClaw worker loop must own the daily refresh schedule')
+assert(loop.includes('dailySourceRefreshRunExists'), 'OpenClaw worker loop must avoid duplicate daily refreshes after restarts')
 assert(loop.includes("runCentralGBrainIngestion('source_refresh')"), 'OpenClaw worker loop must run the research source refresh')
 
 console.log('OpenClaw scheduler verification passed')

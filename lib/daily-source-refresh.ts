@@ -5,6 +5,12 @@ export type DailySourceRefreshDecision = {
   runKey: string
 }
 
+export type DailySourceRefreshRun = {
+  trigger: string
+  status: string
+  started_at: string
+}
+
 export function shouldRunDailySourceRefresh(input: {
   now?: Date
   lastRunKey: string | null
@@ -24,6 +30,19 @@ export function shouldRunDailySourceRefresh(input: {
     runKey,
     shouldRun: reachedTarget && input.lastRunKey !== runKey,
   }
+}
+
+export function dailySourceRefreshRunExists(runs: DailySourceRefreshRun[], runKey: string): boolean {
+  return runs.some((run) =>
+    run.trigger === 'source_refresh' &&
+    run.status !== 'failed' &&
+    pacificDateKey(new Date(run.started_at)) === runKey,
+  )
+}
+
+export function pacificDateKey(date: Date, timeZone = PACIFIC_TIME_ZONE): string {
+  const parts = zonedParts(date, timeZone)
+  return `${parts.year}-${parts.month}-${parts.day}`
 }
 
 function zonedParts(date: Date, timeZone: string): {
