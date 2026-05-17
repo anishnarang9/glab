@@ -14,6 +14,7 @@
     "seed-corpus": "bun scripts/seed-corpus.ts",
     "typecheck": "tsc --noEmit",
     "verify:pipeline": "bun scripts/verify-pipeline.ts",
+    "verify:shared-artifacts": "bun scripts/verify-shared-artifact-ingestion.ts",
     "ci": "bun run typecheck && bun run verify:pipeline && bun run build",
     "test": "bun run ci",
     "brain:ingest": "bun scripts/ingest-brain.ts",
