@@ -3,7 +3,12 @@
 
 import { useState, FormEvent, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import ReactMarkdown from "react-markdown";
 import NeuralBackground from "@/components/NeuralBackground";
+
+function stripCitations(text: string): string {
+  return text.replace(/\s*\[(artifact|claim|evidence|artifact):[a-f0-9-]+\]/g, "");
+}
 
 function OnboardContent() {
   const searchParams = useSearchParams();
@@ -81,10 +86,7 @@ function OnboardContent() {
           <div className="flex flex-col gap-6">
             <p className="text-lg font-medium text-indigo-950">{query}</p>
 
-            <div
-              ref={responseRef}
-              className="text-indigo-800 text-sm leading-relaxed whitespace-pre-wrap min-h-[4rem]"
-            >
+            <div ref={responseRef} className="min-h-[4rem]">
               {loading && !response && (
                 <span className="inline-flex gap-1.5 items-center">
                   <span className="synapse-dot w-1.5 h-1.5 rounded-full bg-indigo-400 block" />
@@ -92,7 +94,15 @@ function OnboardContent() {
                   <span className="synapse-dot w-1.5 h-1.5 rounded-full bg-indigo-400 block" style={{ animationDelay: "0.6s" }} />
                 </span>
               )}
-              {response}
+              {response && (
+                <div className="prose prose-sm prose-indigo max-w-none
+                  prose-headings:font-semibold prose-headings:text-indigo-950
+                  prose-p:text-indigo-800 prose-p:leading-relaxed
+                  prose-li:text-indigo-800 prose-strong:text-indigo-950
+                  prose-hr:border-indigo-100">
+                  <ReactMarkdown>{stripCitations(response)}</ReactMarkdown>
+                </div>
+              )}
             </div>
           </div>
         )}
