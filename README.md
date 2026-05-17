@@ -1,4 +1,4 @@
-# Cortex
+# GTeam
 
 **The shared brain for your research lab.**
 
