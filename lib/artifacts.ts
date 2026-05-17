@@ -9,6 +9,7 @@ import {
   getBrain,
   startIngestionRun,
 } from '@/lib/brain'
+import { embeddingOrNull, validateEmbedding } from '@/lib/embedding-storage'
 import { runOpenClawOnEvidence } from '@/lib/openclaw'
 import { supabaseAdmin } from '@/lib/supabase'
 import type {
@@ -171,6 +172,10 @@ async function normalizeArtifactInput(input: CreateArtifactInput): Promise<{
   if (!isTier(tier)) throw new Error(`Invalid artifact tier: ${String(tier)}`)
 
   const content = requireText(input.content, 'content', 40_000)
+  const embedding = await embeddingOrNull({
+    content,
+    existing: input.embedding ?? null,
+  })
 
   return {
     owner_id: requireText(input.ownerId, 'ownerId', 120),
@@ -179,7 +184,7 @@ async function normalizeArtifactInput(input: CreateArtifactInput): Promise<{
     tier,
     title: input.title == null || input.title.trim() === '' ? titleFromContent(content) : requireText(input.title, 'title', 180),
     content,
-    embedding: validateEmbedding(input.embedding ?? null),
+    embedding,
   }
 }
 
@@ -251,13 +256,4 @@ function requireText(value: string, label: string, maxLength: number): string {
 function titleFromContent(content: string): string {
   const firstLine = content.split(/\r?\n/).find((line) => line.trim().length > 0)?.trim() ?? 'Untitled artifact'
   return firstLine.replace(/^#+\s*/, '').slice(0, 180)
-}
-
-function validateEmbedding(embedding: number[] | null): number[] | null {
-  if (embedding == null) return null
-  if (embedding.length !== 1024) throw new Error(`Embedding must be 1024 dimensions; received ${embedding.length}`)
-  for (const value of embedding) {
-    if (!Number.isFinite(value)) throw new Error('Embedding contains a non-finite number')
-  }
-  return embedding
 }

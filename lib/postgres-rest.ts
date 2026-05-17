@@ -1,4 +1,5 @@
 import postgres, { type Sql } from 'postgres'
+import { formatPgVectorLiteral } from '@/lib/embedding-storage'
 
 type QueryError = {
   message: string
@@ -342,6 +343,7 @@ function rowValues(rows: Array<Record<string, unknown>>, columns: string[]): unk
 function dbValue(column: string, value: unknown): unknown {
   if (value == null) return null
   if (jsonColumns.has(column)) return JSON.stringify(value)
+  if (column === 'embedding' && Array.isArray(value)) return formatPgVectorLiteral(value as number[])
   return value
 }
 
