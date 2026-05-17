@@ -29,11 +29,11 @@ export default function HomePage() {
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-medium tracking-tight text-indigo-950">
-              LabBrain
+              GTeam
             </h1>
           </div>
           <p className="text-sm text-indigo-400 font-light">
-            Your lab&apos;s collective memory
+            Your team&apos;s collective memory
           </p>
           <button
             onClick={() => router.push("/team")}

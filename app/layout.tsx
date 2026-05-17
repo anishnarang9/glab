@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LabBrain",
-  description: "Your lab's collective memory",
+  title: "GTeam",
+  description: "Your team's collective memory",
 };
 
 export default function RootLayout({

@@ -76,7 +76,7 @@ function OnboardContent() {
           onClick={() => router.push("/")}
           className="text-indigo-300 hover:text-indigo-600 text-sm transition flex items-center gap-1.5"
         >
-          ← <span className="text-indigo-950 font-medium">LabBrain</span>
+          ← <span className="text-indigo-950 font-medium">GTeam</span>
         </button>
       </header>
 
