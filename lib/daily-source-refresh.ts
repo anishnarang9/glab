@@ -32,10 +32,11 @@ export function shouldRunDailySourceRefresh(input: {
   }
 }
 
-export function dailySourceRefreshRunExists(runs: DailySourceRefreshRun[], runKey: string): boolean {
+export function dailySourceRefreshRunExists(runs: DailySourceRefreshRun[], runKey: string, now = new Date()): boolean {
   return runs.some((run) =>
     run.trigger === 'source_refresh' &&
     run.status !== 'failed' &&
+    !isStaleRunningRefresh(run, now) &&
     pacificDateKey(new Date(run.started_at)) === runKey,
   )
 }
@@ -78,4 +79,16 @@ function requiredPart(parts: Record<string, string>, key: string): string {
   const value = parts[key]
   if (!value) throw new Error(`Could not resolve ${key} for daily source refresh schedule`)
   return value
+}
+
+function isStaleRunningRefresh(run: DailySourceRefreshRun, now: Date): boolean {
+  if (run.status !== 'running') return false
+  const maxRunningMs = readIntEnv('GBRAIN_SOURCE_REFRESH_MAX_RUNNING_MS', 15 * 60_000, 60_000, 60 * 60_000)
+  return now.getTime() - new Date(run.started_at).getTime() > maxRunningMs
+}
+
+function readIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = Number(process.env[name])
+  if (!Number.isInteger(raw)) return fallback
+  return Math.max(min, Math.min(max, raw))
 }

@@ -50,6 +50,7 @@ assert.equal(pickBestResearchEvidence([newestHog, olderArxiv])?.id, 'arxiv')
 
 const route = await readFile('app/api/brain/research-question/route.ts', 'utf8')
 assert(route.includes('pickBestResearchEvidence'), 'route should prefer research evidence over background feed items')
+assert(route.includes('PRIMARY_RESEARCH_SOURCE_KINDS'), 'route should query arXiv/web evidence before HOG background evidence')
 assert(route.includes('embedding_present'), 'route should expose whether the pulled evidence was embedded')
 
 console.log('Research question verification passed')

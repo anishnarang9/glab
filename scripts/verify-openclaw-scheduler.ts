@@ -56,6 +56,17 @@ assert.equal(
   false,
 )
 
+assert.equal(
+  dailySourceRefreshRunExists([
+    {
+      trigger: 'source_refresh',
+      status: 'running',
+      started_at: '2026-05-17T01:03:00.000Z',
+    },
+  ], '2026-05-16', new Date('2026-05-17T01:30:00.000Z')),
+  false,
+)
+
 const loop = await readFile('scripts/openclaw-loop.ts', 'utf8')
 assert(loop.includes('shouldRunDailySourceRefresh'), 'OpenClaw worker loop must own the daily refresh schedule')
 assert(loop.includes('dailySourceRefreshRunExists'), 'OpenClaw worker loop must avoid duplicate daily refreshes after restarts')

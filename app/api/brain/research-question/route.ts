@@ -5,21 +5,16 @@ import { supabaseAdmin } from '@/lib/supabase'
 export const dynamic = 'force-dynamic'
 
 const RESEARCH_SOURCE_KINDS = ['arxiv_query', 'web_page', 'hog_news']
+const PRIMARY_RESEARCH_SOURCE_KINDS = ['arxiv_query', 'web_page']
 
 export async function GET() {
   try {
     const brain = await ensureDefaultBrain()
-    const { data, error } = await supabaseAdmin()
-      .from('evidence_items')
-      .select('id, source_kind, source_ref, title, content, url, published_at, created_at, embedding')
-      .eq('brain_id', brain.id)
-      .in('source_kind', RESEARCH_SOURCE_KINDS)
-      .order('created_at', { ascending: false })
-      .limit(50)
+    const primary = await loadEvidenceCandidates(brain.id, PRIMARY_RESEARCH_SOURCE_KINDS)
+    const fallback = primary.length > 0 ? [] : await loadEvidenceCandidates(brain.id, RESEARCH_SOURCE_KINDS)
+    const candidates = primary.length > 0 ? primary : fallback
 
-    if (error) throw error
-
-    const evidence = pickBestResearchEvidence(data as ResearchQuestionEvidence[])
+    const evidence = pickBestResearchEvidence(candidates)
     if (!evidence) {
       return Response.json({
         ok: false,
@@ -42,7 +37,7 @@ export async function GET() {
         created_at: evidence.created_at,
         embedding_present: evidenceHasEmbedding(evidence),
       },
-      candidates_considered: data.length,
+      candidates_considered: candidates.length,
     })
   } catch (error) {
     return Response.json({
@@ -50,4 +45,17 @@ export async function GET() {
       error: error instanceof Error ? error.message : String(error),
     }, { status: 503 })
   }
+}
+
+async function loadEvidenceCandidates(brainId: string, sourceKinds: string[]): Promise<ResearchQuestionEvidence[]> {
+  const { data, error } = await supabaseAdmin()
+    .from('evidence_items')
+    .select('id, source_kind, source_ref, title, content, url, published_at, created_at, embedding')
+    .eq('brain_id', brainId)
+    .in('source_kind', sourceKinds)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (error) throw error
+  return data as ResearchQuestionEvidence[]
 }
