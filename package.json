@@ -11,10 +11,24 @@
     "match-papers": "bun scripts/match-papers.ts",
     "render-digest": "bun scripts/render-digest.ts",
     "send-digest": "bun scripts/send-digest.ts",
-    "seed-corpus": "bun scripts/seed-corpus.ts"
+    "seed-corpus": "bun scripts/seed-corpus.ts",
+    "typecheck": "tsc --noEmit",
+    "verify:pipeline": "bun scripts/verify-pipeline.ts",
+    "ci": "bun run typecheck && bun run verify:pipeline && bun run build",
+    "test": "bun run ci",
+    "brain:ingest": "bun scripts/ingest-brain.ts",
+    "brain:morning": "bun scripts/ingest-brain.ts --trigger morning_cron",
+    "openclaw:worker": "bun scripts/openclaw-head-gbrain.ts",
+    "openclaw:pending": "bun scripts/openclaw-head-gbrain.ts --pending-only",
+    "openclaw:loop": "bun scripts/openclaw-loop.ts",
+    "email:ingest": "bun scripts/ingest-email.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.54.0",
+    "@supabase/supabase-js": "^2.50.0",
+    "fflate": "0.8.3",
     "next": "^16.2.6",
+    "postgres": "3.4.9",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
