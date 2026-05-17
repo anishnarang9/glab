@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
+import { loadCentralBrainState } from '@/lib/brain-state'
 
 type ResearcherRow = {
   id: string
@@ -35,8 +36,9 @@ type PaperRow = {
 
 export async function GET() {
   const supabase = supabaseAdmin()
+  const defaultBrainName = process.env.LABBRAIN_DEFAULT_BRAIN_NAME ?? 'LabBrain'
 
-  const [researchers, projects, matches, papers] = await Promise.all([
+  const [researchers, projects, matches, papers, brain] = await Promise.all([
     supabase.from('researchers').select('id, name, email, created_at').order('name'),
     supabase
       .from('artifacts')
@@ -48,13 +50,30 @@ export async function GET() {
       .select('id, paper_id, researcher_id, relationship, rationale, confidence, created_at')
       .order('created_at', { ascending: false }),
     supabase.from('papers').select('id, title, authors, arxiv_id, published_at'),
+    supabase
+      .from('brains')
+      .select('id, name, subject, mission, status')
+      .eq('name', defaultBrainName)
+      .maybeSingle(),
   ])
 
-  for (const result of [researchers, projects, matches, papers]) {
+  for (const result of [researchers, projects, matches, papers, brain]) {
     if (result.error) {
       return Response.json({ error: result.error.message }, { status: 500 })
     }
   }
+
+  const centralBrain = brain.data
+    ? {
+        ...brain.data,
+        state: await loadCentralBrainState({
+          brainId: brain.data.id,
+          claims: 8,
+          evidence: 8,
+          commits: 5,
+        }),
+      }
+    : null
 
   const paperById = new Map((papers.data as PaperRow[]).map((paper) => [paper.id, paper]))
   const sharedProjects = projects.data as ProjectRow[]
@@ -75,5 +94,5 @@ export async function GET() {
       })),
   }))
 
-  return Response.json({ researchers: data })
+  return Response.json({ researchers: data, central_brain: centralBrain })
 }

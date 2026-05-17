@@ -18,15 +18,34 @@ interface Researcher {
   }[];
 }
 
+interface CentralBrain {
+  name: string;
+  subject: string;
+  state: {
+    claims: {
+      id: string;
+      statement: string;
+      status: string;
+      confidence: number | null;
+    }[];
+    evidence: { id: string }[];
+    commits: { id: string; summary: string }[];
+  };
+}
+
 export default function TeamPage() {
   const router = useRouter();
   const [researchers, setResearchers] = useState<Researcher[]>([]);
+  const [centralBrain, setCentralBrain] = useState<CentralBrain | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/team")
       .then((r) => r.json())
-      .then((d) => setResearchers(d.researchers ?? []))
+      .then((d) => {
+        setResearchers(d.researchers ?? []);
+        setCentralBrain(d.central_brain ?? null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -54,13 +73,51 @@ export default function TeamPage() {
               <span className="synapse-dot w-1.5 h-1.5 rounded-full bg-indigo-400 block" style={{ animationDelay: "0.6s" }} />
             </div>
           </div>
-        ) : researchers.length === 0 ? (
-          <p className="text-sm text-indigo-300">No researchers found.</p>
+        ) : researchers.length === 0 && !centralBrain ? (
+          <p className="text-sm text-indigo-300">No central brain state found.</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {researchers.map((researcher) => (
-              <ResearcherCard key={researcher.id} {...researcher} />
-            ))}
+          <div className="flex flex-col gap-8">
+            {centralBrain && (
+              <section className="flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase text-indigo-300">Central GBrain</p>
+                    <h2 className="text-xl font-medium text-indigo-950">{centralBrain.name}</h2>
+                    <p className="text-sm text-indigo-400">{centralBrain.subject}</p>
+                  </div>
+                  <div className="flex gap-3 text-xs text-indigo-400">
+                    <span>{centralBrain.state.claims.length} claims</span>
+                    <span>{centralBrain.state.evidence.length} evidence</span>
+                    <span>{centralBrain.state.commits.length} commits</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {centralBrain.state.claims.slice(0, 4).map((claim) => (
+                    <article
+                      key={claim.id}
+                      className="rounded-lg border border-indigo-100 bg-white/70 p-4 shadow-sm shadow-indigo-100"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[11px] uppercase text-indigo-300">{claim.status}</span>
+                        <span className="text-xs text-indigo-300">
+                          {claim.confidence == null ? "unknown" : claim.confidence.toFixed(2)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-relaxed text-indigo-950">{claim.statement}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {researchers.length > 0 && (
+              <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {researchers.map((researcher) => (
+                  <ResearcherCard key={researcher.id} {...researcher} />
+                ))}
+              </section>
+            )}
           </div>
         )}
       </div>
