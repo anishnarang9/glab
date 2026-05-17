@@ -187,7 +187,7 @@ export async function createEvidenceItem(input: EvidenceInput): Promise<{ eviden
 
   if (existing.error) throw existing.error
   if (existing.data) {
-    return { evidence: await backfillEvidenceEmbedding(existing.data), created: false }
+    return { evidence: await ensureEvidenceEmbedding(existing.data), created: false }
   }
 
   const embedding = await resolveEvidenceEmbedding({
@@ -271,7 +271,7 @@ export async function resolveEvidenceEmbedding(input: {
   })
 }
 
-async function backfillEvidenceEmbedding(evidence: EvidenceItem): Promise<EvidenceItem> {
+export async function ensureEvidenceEmbedding<T extends { id: string; content: string; embedding: StoredEmbedding }>(evidence: T): Promise<T> {
   if (evidence.embedding) return evidence
 
   const embedding = await resolveEvidenceEmbedding({
@@ -288,7 +288,7 @@ async function backfillEvidenceEmbedding(evidence: EvidenceItem): Promise<Eviden
     .single()
 
   if (error) throw error
-  return data
+  return data as unknown as T
 }
 
 export async function createBrainCommit(input: CreateCommitInput): Promise<BrainCommit> {

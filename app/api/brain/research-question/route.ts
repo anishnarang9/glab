@@ -1,4 +1,4 @@
-import { ensureDefaultBrain } from '@/lib/brain'
+import { ensureDefaultBrain, ensureEvidenceEmbedding } from '@/lib/brain'
 import { buildResearchQuestion, evidenceHasEmbedding, pickBestResearchEvidence, type ResearchQuestionEvidence } from '@/lib/research-question'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -14,7 +14,8 @@ export async function GET() {
     const fallback = primary.length > 0 ? [] : await loadEvidenceCandidates(brain.id, RESEARCH_SOURCE_KINDS)
     const candidates = primary.length > 0 ? primary : fallback
 
-    const evidence = pickBestResearchEvidence(candidates)
+    const selected = pickBestResearchEvidence(candidates)
+    const evidence = selected ? await ensureEvidenceEmbedding(selected) : null
     if (!evidence) {
       return Response.json({
         ok: false,

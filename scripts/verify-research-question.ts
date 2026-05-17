@@ -45,12 +45,25 @@ const olderArxiv: ResearchQuestionEvidence = {
   created_at: '2026-05-17T01:05:00.000Z',
   embedding: [0.1],
 }
+const relevantWeb: ResearchQuestionEvidence = {
+  id: 'web',
+  source_kind: 'web_page',
+  source_ref: 'https://news.mit.edu/topic/neuroscience',
+  title: 'New neuroscience study maps visual cortex decoding',
+  content: 'fMRI brain cortex neural decoding',
+  url: null,
+  published_at: null,
+  created_at: '2026-05-17T01:00:00.000Z',
+  embedding: [0.2],
+}
 
 assert.equal(pickBestResearchEvidence([newestHog, olderArxiv])?.id, 'arxiv')
+assert.equal(pickBestResearchEvidence([olderArxiv, relevantWeb])?.id, 'web')
 
 const route = await readFile('app/api/brain/research-question/route.ts', 'utf8')
 assert(route.includes('pickBestResearchEvidence'), 'route should prefer research evidence over background feed items')
 assert(route.includes('PRIMARY_RESEARCH_SOURCE_KINDS'), 'route should query arXiv/web evidence before HOG background evidence')
+assert(route.includes('ensureEvidenceEmbedding'), 'route should repair missing embeddings before returning evidence')
 assert(route.includes('embedding_present'), 'route should expose whether the pulled evidence was embedded')
 
 console.log('Research question verification passed')

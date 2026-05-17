@@ -1,3 +1,5 @@
+import type { StoredEmbedding } from '@/lib/embedding-storage'
+
 export type ResearchQuestionEvidence = {
   id: string
   source_kind: string
@@ -7,7 +9,7 @@ export type ResearchQuestionEvidence = {
   url: string | null
   published_at: string | null
   created_at: string
-  embedding: unknown
+  embedding: StoredEmbedding
 }
 
 export function buildResearchQuestion(evidence: Pick<ResearchQuestionEvidence, 'title' | 'content' | 'source_kind'>): string {
@@ -38,7 +40,31 @@ function evidenceScore(evidence: ResearchQuestionEvidence): number {
     evidence.source_kind === 'web_page' ? 200 :
     100
   const embeddingScore = evidenceHasEmbedding(evidence) ? 50 : 0
-  return sourceScore + embeddingScore + Date.parse(evidence.created_at) / 1_000_000_000_000
+  return sourceScore + embeddingScore + labRelevanceScore(evidence) + Date.parse(evidence.created_at) / 1_000_000_000_000
+}
+
+function labRelevanceScore(evidence: Pick<ResearchQuestionEvidence, 'title' | 'content'>): number {
+  const text = `${evidence.title ?? ''} ${evidence.content}`.toLowerCase()
+  const matches = [
+    'neuroscience',
+    'neural',
+    'neuron',
+    'brain',
+    'fmri',
+    'cortex',
+    'cortical',
+    'visual',
+    'vision',
+    'decoding',
+    'connectome',
+    'connectomics',
+    'bci',
+    'motor',
+    'population dynamics',
+    'computational neuroscience',
+  ].filter((term) => text.includes(term)).length
+
+  return Math.min(matches, 4) * 150
 }
 
 function cleanSubject(value: string | null): string {
