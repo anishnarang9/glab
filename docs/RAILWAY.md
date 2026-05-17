@@ -13,8 +13,8 @@ Current production service names:
    - purpose: watches Supabase for shared artifacts from smaller GBrains, turns them into Central GBrain evidence, and continuously applies the head OpenClaw operator
 3. `diplomatic-creation`
    - config file: `deploy/railway-morning-cron.json`
-   - command: `bun run brain:nightly`
-   - cron: `30 0 * * *` (00:30 UTC / about 5:30 PM Pacific during PDT)
+   - command: `bun run brain:daily`
+   - cron: `30 0 * * *` (00:30 UTC / 5:30 PM Pacific during PDT)
 
 ## Required Variables
 
@@ -24,6 +24,7 @@ Set these on all three Railway services unless noted:
 DATABASE_URL=
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
+VOYAGE_API_KEY=
 LABBRAIN_DEFAULT_BRAIN_NAME=LabBrain
 LABBRAIN_DEFAULT_BRAIN_SUBJECT="research lab knowledge"
 LABBRAIN_DEFAULT_BRAIN_MISSION="Maintain evidence-backed shared truth for the lab"
@@ -34,12 +35,13 @@ OPENCLAW_POLL_INTERVAL_MS=60000
 OPENCLAW_PENDING_LIMIT=50
 SUPABASE_SHARED_INGEST_ENABLED=true
 SHARED_ARTIFACT_INGEST_LIMIT=500
-LABBRAIN_ARXIV_QUERY=cat:cs.LG
-LABBRAIN_ARXIV_QUERIES=
+LABBRAIN_ARXIV_QUERY=
+LABBRAIN_ARXIV_QUERIES="cat:q-bio.NC;cat:cs.CV AND all:neuroscience;cat:cs.LG AND all:fMRI"
 LABBRAIN_RSS_FEEDS=
 LABBRAIN_WEB_SOURCES=
 LABBRAIN_USE_CURATED_WEB_SOURCES=true
 LABBRAIN_HOG_FEEDS=top,new
+GBRAIN_AUTO_EMBED_ENABLED=true
 HOG_ACCESS_KEY=
 HOG_SECRET_KEY=
 HOG_BASE_URL=https://developer.thehog.ai
@@ -96,7 +98,7 @@ demo specifically needs the mailbox path.
 6. Add the environment variables above.
 7. Run the SQL in `db/schema.sql`, then `db/seed.sql`, against Supabase.
 8. Verify `/api/health` returns `{ "ok": true }`.
-9. Insert a shared artifact directly into Supabase or run `brain:nightly`, then confirm rows appear in:
+9. Insert a shared artifact directly into Supabase or run `brain:daily`, then confirm rows appear in:
    - `artifacts` with `tier='shared'`
    - `ingestion_runs`
    - `evidence_items`

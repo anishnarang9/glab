@@ -10,6 +10,7 @@ import {
   startIngestionRun,
 } from '@/lib/brain'
 import { supabaseAdmin } from '@/lib/supabase'
+import { embeddingOrNull } from '@/lib/embedding-storage'
 import { runOpenClawOnEvidence } from '@/lib/openclaw'
 import { runSharedArtifactIngestion } from '@/lib/shared-artifact-ingestion'
 import type { Artifact, Brain, BrainSource, IngestionRunTrigger, Json, Paper } from '@/db/client'
@@ -335,18 +336,18 @@ async function upsertPapers(entries: ArxivEntry[]): Promise<Paper[]> {
   const client = supabaseAdmin()
   const papers: Paper[] = []
   for (const entry of entries) {
+    const embedding = await embeddingOrNull({ content: `${entry.title}\n${entry.abstract}` })
+    const row = {
+      arxiv_id: entry.arxivId,
+      title: entry.title,
+      abstract: entry.abstract,
+      authors: entry.authors,
+      published_at: entry.publishedAt,
+      ...(embedding ? { embedding } : {}),
+    }
     const { data, error } = await client
       .from('papers')
-      .upsert(
-        {
-          arxiv_id: entry.arxivId,
-          title: entry.title,
-          abstract: entry.abstract,
-          authors: entry.authors,
-          published_at: entry.publishedAt,
-        },
-        { onConflict: 'arxiv_id' },
-      )
+      .upsert(row, { onConflict: 'arxiv_id' })
       .select()
       .single()
 

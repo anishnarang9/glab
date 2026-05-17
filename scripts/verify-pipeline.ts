@@ -29,6 +29,7 @@ const requiredEnv = [
   'SUPABASE_URL',
   'SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
+  'VOYAGE_API_KEY',
   'LABBRAIN_DEFAULT_BRAIN_NAME',
   'LABBRAIN_ARXIV_QUERIES',
   'LABBRAIN_WEB_SOURCES',
@@ -38,6 +39,7 @@ const requiredEnv = [
   'LABBRAIN_WORKER_TOKEN',
   'SUPABASE_SHARED_INGEST_ENABLED',
   'SHARED_ARTIFACT_INGEST_LIMIT',
+  'GBRAIN_AUTO_EMBED_ENABLED',
   'EMAIL_INGEST_ENABLED',
   'EMAIL_INGEST_MONITORED_ADDRESS',
   'COMPOSIO_USER_API_KEY',
@@ -64,6 +66,7 @@ const packageScripts = [
   'ci',
   'ci:live',
   'brain:morning',
+  'brain:daily',
   'brain:nightly',
   'brain:worker',
   'openclaw:worker',
@@ -115,7 +118,7 @@ async function assertRailwayConfigs(): Promise<void> {
     assert(typeof config.deploy === 'object' && config.deploy != null, `${file} missing deploy block`)
     if (file.endsWith('railway-morning-cron.json')) {
       const deploy = config.deploy as Record<string, unknown>
-      assert(deploy.startCommand === 'bun run brain:nightly', `${file} should run brain:nightly`)
+      assert(deploy.startCommand === 'bun run brain:daily', `${file} should run brain:daily`)
       assert(deploy.cronSchedule === '30 0 * * *', `${file} should run at 00:30 UTC / 5:30 PM Pacific during PDT`)
     }
     if (file.endsWith('railway-openclaw-worker.json')) {

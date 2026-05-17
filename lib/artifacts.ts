@@ -9,7 +9,7 @@ import {
   getBrain,
   startIngestionRun,
 } from '@/lib/brain'
-import { embeddingOrNull, validateEmbedding } from '@/lib/embedding-storage'
+import { embeddingOrNull } from '@/lib/embedding-storage'
 import { runOpenClawOnEvidence } from '@/lib/openclaw'
 import { supabaseAdmin } from '@/lib/supabase'
 import type {

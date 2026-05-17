@@ -1,6 +1,7 @@
 // Central GBrain core helpers: brain identity, sources, ingestion runs, evidence, commits.
 
 import { createHash } from 'node:crypto'
+import { embeddingOrNull, type Embedder } from '@/lib/embedding-storage'
 import { supabaseAdmin } from '@/lib/supabase'
 import type {
   Brain,
@@ -187,6 +188,11 @@ export async function createEvidenceItem(input: EvidenceInput): Promise<{ eviden
   if (existing.error) throw existing.error
   if (existing.data) return { evidence: existing.data, created: false }
 
+  const embedding = await resolveEvidenceEmbedding({
+    content,
+    embedding: input.embedding ?? null,
+  })
+
   const { data, error } = await client
     .from('evidence_items')
     .insert({
@@ -201,7 +207,7 @@ export async function createEvidenceItem(input: EvidenceInput): Promise<{ eviden
       content,
       url: input.url ?? null,
       published_at: input.publishedAt ?? null,
-      embedding: input.embedding ?? null,
+      embedding,
       content_hash: contentHash,
     })
     .select()
@@ -209,6 +215,18 @@ export async function createEvidenceItem(input: EvidenceInput): Promise<{ eviden
 
   if (error) throw error
   return { evidence: data, created: true }
+}
+
+export async function resolveEvidenceEmbedding(input: {
+  content: string
+  embedding?: number[] | null
+  embedder?: Embedder
+}): Promise<number[] | null> {
+  return embeddingOrNull({
+    content: input.content,
+    existing: input.embedding ?? null,
+    embedder: input.embedder,
+  })
 }
 
 export async function createBrainCommit(input: CreateCommitInput): Promise<BrainCommit> {

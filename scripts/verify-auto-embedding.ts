@@ -4,6 +4,7 @@ import {
   formatPgVectorLiteral,
   type Embedder,
 } from '@/lib/embedding-storage'
+import { resolveEvidenceEmbedding } from '@/lib/brain'
 
 const fakeEmbedding = Array.from({ length: 1024 }, (_, index) => index / 1024)
 let calls = 0
@@ -30,6 +31,14 @@ const existing = await embeddingOrNull({
 })
 
 assert.equal(existing, fakeEmbedding)
+
+const evidenceEmbedding = await resolveEvidenceEmbedding({
+  content: 'A new arXiv abstract about visual cortex decoding should be embedded before storage.',
+  embedding: null,
+  embedder: fakeEmbedder,
+})
+
+assert.deepEqual(evidenceEmbedding, fakeEmbedding)
 assert.equal(formatPgVectorLiteral([0.1, 0.2, 0.3]), '[0.1,0.2,0.3]')
 
 console.log('Auto embedding verification passed')
